@@ -1,3 +1,4 @@
+from math import pi
 import torch as th
 from torch import nn
 
@@ -215,6 +216,21 @@ class DecoderLayer(nn.Module):
         return h_ff + x, state
 
 
+def sin_embeddings(max_pos, dim):
+    """Returns sinusoidal embedings (for possition embeddings)"""
+    # Scale for each dimension
+    dim_scale = 2 * (th.arange(dim) / 2).long().float() / dim
+    dim_scale = th.pow(th.full(dim, 10000.0), dim_scale).view(1, -1)
+    # Phase to change sine to cosine every other dim
+    phase = th.zeros((1, dim))
+    phase[0, 1::2] = pi / 2
+    # Position value
+    pos = th.arange(max_pos).view(-1, 1)
+    # Embeddings
+    embeds = th.sin(pos / dim_scale + phase)
+    return embeds
+
+
 class Transformer(nn.Module):
 
     def __init__(
@@ -235,6 +251,8 @@ class Transformer(nn.Module):
         self.vocab = vocab
         # Token embeddings (this will be shared for encoder/decoder)
         self.embeds = nn.Embedding(len(vocab), embed_dim, 0)
+        # Positional embeddings
+        self.pos_embeds = sin_embeddings(512, embed_dim)
         # Encoder Layers
         self.encoder_layers = nn.ModuleList([
             EncoderLayer(embed_dim, n_heads, hidden_dim, dropout=dropout)
@@ -251,10 +269,11 @@ class Transformer(nn.Module):
         self.logits = nn.Linear(embed_dim, len(vocab))
         # Share embedding and softmax weights
         self.logits.weight = self.embeds.weight
-        # TODO: positional embeddings
 
     def encode(self, src_tokens, src_mask=None):
         x = self.embeds(src_tokens)
+        # Add position embedding
+        x += self.pos_embeds[:x.dim(0)].view(-1, 1, 1).detach()
         for layer in self.encoder_layers:
             x = layer(x, src_mask=src_mask)
         return self.layer_norm_enc(x)
@@ -264,6 +283,9 @@ class Transformer(nn.Module):
         encodings = self.encode(src_tokens, src_mask)
         # Decode
         h = self.embeds(tgt_tokens)
+        # Add postion embeddings
+        h += self.pos_embeds[:h.dim(0)].view(-1, 1, self.embed_dim).detach()
+        # Pass through all layers
         for layer in self.decoder_layers:
             h = layer(h, encodings, src_mask=src_mask, tgt_mask=tgt_mask)
         # Logits
@@ -281,6 +303,10 @@ class Transformer(nn.Module):
     ):
         new_state = []
         h = self.embeds(tgt_token)
+        # Add position embedding
+        pos = states[0].dim(0)
+        h += self.pos_embeds[pos].view(1, 1, -1).detach()
+        # Pass through all layers
         for layer, state in zip(self.decoder_layers, states):
             h, state = layer.incremental_forward(
                 h,
