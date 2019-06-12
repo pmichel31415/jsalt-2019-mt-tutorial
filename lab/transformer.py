@@ -1,4 +1,4 @@
-from math import pi
+from math import pi, sqrt
 import torch as th
 from torch import nn
 
@@ -41,6 +41,8 @@ class MultiHeadAttention(nn.Module):
         v = self.value(values).view(n, bsz, self.n_heads, self.head_dim)
         # Compute attention potentials
         potentials = th.einsum("mbhi,nbhj->mnbh", [q, k])
+        # Rescale by inverse sqrt of the dimension for well behaved softmax
+        potentials /= sqrt(self.embed_dim)
         # Mask certain input positions
         if in_mask is not None:
             in_mask = in_mask.view(1, n, bsz, 1)
@@ -48,7 +50,7 @@ class MultiHeadAttention(nn.Module):
         # Causal masking: make it impossible to "attend to the future"
         if causal_masking:
             # We want causal_mask[i, j] = 1 if j > i
-            causal_mask = th.triu(th.ones(m, n)).ne(1).view(m, n, 1, 1)
+            causal_mask = th.triu(th.ones(m, n)).eq(0).view(m, n, 1, 1)
             causal_mask = causal_mask.to(potentials.device)
             potentials = potentials.masked_fill(causal_mask, NEG_INF)
         # Softmax over the input length n, differently for each head
@@ -220,12 +222,12 @@ def sin_embeddings(max_pos, dim):
     """Returns sinusoidal embedings (for possition embeddings)"""
     # Scale for each dimension
     dim_scale = 2 * (th.arange(dim) / 2).long().float() / dim
-    dim_scale = th.pow(th.full(dim, 10000.0), dim_scale).view(1, -1)
+    dim_scale = th.pow(th.full((dim,), 10000.0), dim_scale).view(1, -1)
     # Phase to change sine to cosine every other dim
     phase = th.zeros((1, dim))
     phase[0, 1::2] = pi / 2
     # Position value
-    pos = th.arange(max_pos).view(-1, 1)
+    pos = th.arange(max_pos).float().view(-1, 1)
     # Embeddings
     embeds = th.sin(pos / dim_scale + phase)
     return embeds
@@ -251,29 +253,37 @@ class Transformer(nn.Module):
         self.vocab = vocab
         # Token embeddings (this will be shared for encoder/decoder)
         self.embeds = nn.Embedding(len(vocab), embed_dim, 0)
+        nn.init.normal_(self.embeds.weight, std=1/sqrt(embed_dim))
         # Positional embeddings
-        self.pos_embeds = sin_embeddings(512, embed_dim)
+        self.pos_embeds = sin_embeddings(2048, embed_dim)
         # Encoder Layers
         self.encoder_layers = nn.ModuleList([
             EncoderLayer(embed_dim, n_heads, hidden_dim, dropout=dropout)
             for l in range(n_layers)
         ])
-        # Final layer norm
+        # Final encoder layer norm
         self.layer_norm_enc = nn.LayerNorm(embed_dim)
+        # Output proj (this is important because the embeddings are tied)
+        # and the output has been "layer-normalized".
+        # this layer can adjust the scale before the logits.
+        self.out_proj = nn.Linear(embed_dim, embed_dim)
         # Decoder Layers
         self.decoder_layers = nn.ModuleList([
             DecoderLayer(embed_dim, n_heads, hidden_dim, dropout=dropout)
             for l in range(n_layers)
         ])
+        # Final decoder layer norm
+        self.layer_norm_dec = nn.LayerNorm(embed_dim)
         # Output projection for the logits
         self.logits = nn.Linear(embed_dim, len(vocab))
         # Share embedding and softmax weights
         self.logits.weight = self.embeds.weight
 
     def encode(self, src_tokens, src_mask=None):
-        x = self.embeds(src_tokens)
+        x = self.embeds(src_tokens) * sqrt(self.embed_dim)
         # Add position embedding
-        x += self.pos_embeds[:x.dim(0)].view(-1, 1, 1).detach()
+        pos_offset = self.pos_embeds[:x.size(0)].view(-1, 1, self.embed_dim)
+        x += pos_offset.to(x.device).detach()
         for layer in self.encoder_layers:
             x = layer(x, src_mask=src_mask)
         return self.layer_norm_enc(x)
@@ -282,12 +292,17 @@ class Transformer(nn.Module):
         # Encode
         encodings = self.encode(src_tokens, src_mask)
         # Decode
-        h = self.embeds(tgt_tokens)
+        h = self.embeds(tgt_tokens) * sqrt(self.embed_dim)
         # Add postion embeddings
-        h += self.pos_embeds[:h.dim(0)].view(-1, 1, self.embed_dim).detach()
+        pos_offset = self.pos_embeds[:h.size(0)].view(-1, 1, self.embed_dim)
+        h += pos_offset.to(h.device).detach()
         # Pass through all layers
         for layer in self.decoder_layers:
             h = layer(h, encodings, src_mask=src_mask, tgt_mask=tgt_mask)
+        # Final layer norm so things don't blow up
+        h = self.layer_norm_dec(h)
+        # Output proj
+        h = self.out_proj(h)
         # Logits
         logits = self.logits(h)
         # Return log probs
@@ -302,10 +317,11 @@ class Transformer(nn.Module):
         tgt_mask=None
     ):
         new_state = []
-        h = self.embeds(tgt_token)
+        h = self.embeds(tgt_token) * sqrt(self.embed_dim)
         # Add position embedding
-        pos = states[0].dim(0)
-        h += self.pos_embeds[pos].view(1, 1, -1).detach()
+        pos = states[0].size(0)
+        pos_offset = self.pos_embeds[pos].view(1, 1, -1)
+        h += pos_offset.detach()
         # Pass through all layers
         for layer, state in zip(self.decoder_layers, states):
             h, state = layer.incremental_forward(
@@ -316,6 +332,10 @@ class Transformer(nn.Module):
                 tgt_mask=tgt_mask,
             )
             new_state.append(state)
+        # Final layer norm so things don't blow up
+        h = self.layer_norm_dec(h)
+        # Output proj
+        h = self.out_proj(h)
         # Log prob at this position
         log_p = nn.functional.log_softmax(self.logits(h), dim=-1)
         return log_p, new_state

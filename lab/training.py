@@ -33,7 +33,7 @@ def get_args():
     parser.add_argument("--dropout", type=float, default=0.1)
     # Optimization parameters
     parser.add_argument("--n-epochs", type=int, default=30)
-    parser.add_argument("--lr", type=int, default=1e-3)
+    parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--tokens-per-batch", type=int, default=2000)
     parser.add_argument("--samples-per-batch", type=int, default=200)
     return parser.parse_args()
@@ -56,6 +56,8 @@ def inverse_sqrt_schedule(warmup, lr0):
 def train_epoch(model, optim, dataloader, lr_schedule=None):
     # Model device
     device = list(model.parameters())[0].device
+    # track stats
+    stats = {"loss": 10000}
     # Iterate over batches
     itr = tqdm(dataloader)
     for batch in itr:
@@ -74,15 +76,18 @@ def train_epoch(model, optim, dataloader, lr_schedule=None):
         loss = 0.9 * nll + 0.1 * label_smoothing
         # Reduce (with masking)
         loss_mask = tgt_mask[1:].eq(0).float()
-        reduced_loss = (loss * loss_mask).sum() / loss_mask.sum()
+        reduced_loss = (loss * loss_mask).sum() / loss_mask.float().sum()
         # Backprop
         reduced_loss.backward()
         # Adjust learning rate with schedule
         if lr_schedule is not None:
+            learning_rate = next(lr_schedule)
             for param_group in optim.param_groups:
-                param_group['lr'] = next(lr_schedule)
+                param_group['lr'] = learning_rate
         # Optimizer step
         optim.step()
+        # Update stats
+        itr.set_postfix(loss=reduced_loss.item())
 
 
 def evaluate_ppl(model, dataloader):
@@ -100,12 +105,12 @@ def evaluate_ppl(model, dataloader):
             # Get log probs
             log_p = model(src_tokens, tgt_tokens, src_mask, tgt_mask)
             # Loss (this selects log_p[i, b, tgt_tokens[i+1, b]])
-            nll = log_p[:-1].gather(-1, tgt_tokens[1:].unsqueeze(-1))
+            nll = - log_p[:-1].gather(-1, tgt_tokens[1:].unsqueeze(-1))
             # Perplexity
             loss_mask = tgt_mask[1:].eq(0).float()
             ppl += th.exp(nll.squeeze(-1) * loss_mask).sum().item()
             # Denominator
-            tot_tokens += loss_mask.sum().item()
+            tot_tokens += loss_mask.float().sum().item()
     return ppl/tot_tokens
 
 
@@ -131,7 +136,7 @@ def main():
     # Optimizer
     optim = th.optim.Adam(model.parameters(), lr=args.lr)
     # Learning rate schedule
-    lr_schedule = inverse_sqrt_schedule(0, args.lr)
+    lr_schedule = inverse_sqrt_schedule(4000, args.lr)
     # Dataloader
     train_loader = MTDataLoader(
         train_data,
@@ -150,14 +155,16 @@ def main():
     for epoch in range(1, args.n_epochs+1):
         print(f"----- Epoch {epoch} -----")
         # Train for one epoch
+        model.train()
         train_epoch(model, optim, train_loader, lr_schedule)
         # Check dev ppl
+        model.eval()
         valid_ppl = evaluate_ppl(model, valid_loader)
         print(f"Validation perplexity: {valid_ppl:.2f}")
         # Early stopping maybe
         if valid_ppl < best_ppl:
             print(f"Saving new best model (epoch {epoch} ppl {valid_ppl})")
-            th.save(model.state_dict())
+            th.save(model.state_dict(), args.model_file)
 
 
 if __name__ == "__main__":
