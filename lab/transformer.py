@@ -251,6 +251,7 @@ class Transformer(nn.Module):
         self.logits = nn.Linear(embed_dim, len(vocab))
         # Share embedding and softmax weights
         self.logits.weight = self.embeds.weight
+        # TODO: positional embeddings
 
     def encode(self, src_tokens, src_mask=None):
         x = self.embeds(src_tokens)
