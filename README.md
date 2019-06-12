@@ -6,7 +6,7 @@
 
 1. Install python 3.6 (recommended distrib: [miniconda](https://docs.conda.io/en/latest/miniconda.html))
 2. Install pytorch: https://pytorch.org/get-started/locally/#start-locally
-3. Download data: TODO
+3. Download data (preprocessed IWSLT16 fr-en): https://drive.google.com/file/d/1UaWMQRFaVDfyimw-A29bkffh-hmFBedh/view?usp=sharing
 4. Download pretrained model: TODO
 5. Run test to check everything works: TODO
 
