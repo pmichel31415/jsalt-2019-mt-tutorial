@@ -155,7 +155,7 @@ class MTDataLoader(data.DataLoader):
         if self.shuffle:
             self.order = th.randperm(N).numpy()
         else:
-            self.order = th.arange(N)
+            self.order = th.arange(N).long().numpy()
         self.batches = []
         batch_size = max_src_tokens = max_tgt_tokens = 0
         current_batch = []
@@ -207,7 +207,7 @@ class MTDataLoader(data.DataLoader):
         return src_tokens, src_mask, tgt_tokens, tgt_mask
 
     def __next__(self):
-        if self.pos > len(self.batches):
+        if self.pos >= len(self.batches):
             raise StopIteration()
         batch = self.get_batch(self.pos)
         self.pos += 1
