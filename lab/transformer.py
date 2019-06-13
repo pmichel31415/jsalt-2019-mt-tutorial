@@ -3,7 +3,7 @@ import torch as th
 from torch import nn
 
 # Negative infinity constant
-NEG_INF = -1000
+NEG_INF = -100000
 
 def GlorotLinear(input_dim, output_dim):
     """Returns a Glorot initialized linear layer for optimal gradient flow"""
@@ -30,13 +30,13 @@ class MultiHeadAttention(nn.Module):
         self.output = GlorotLinear(self.embed_dim, self.embed_dim)
 
     def forward(
-            self,
-            queries,
-            keys,
-            values,
-            in_mask=None,
-            causal_masking=False,
-            return_weights=False,
+        self,
+        queries,
+        keys,
+        values,
+        in_mask=None,
+        causal_masking=False,
+        return_weights=False,
     ):
         m, bsz, _ = queries.size()
         n, _, _ = keys.size()
@@ -46,7 +46,7 @@ class MultiHeadAttention(nn.Module):
         k = self.key(keys).view(n, bsz, self.n_heads, self.head_dim)
         v = self.value(values).view(n, bsz, self.n_heads, self.head_dim)
         # Compute attention potentials
-        potentials = th.einsum("mbhi,nbhj->mnbh", [q, k])
+        potentials = th.einsum("mbhd,nbhd->mnbh", [q, k])
         # Rescale by inverse sqrt of the dimension for well behaved softmax
         potentials /= sqrt(self.embed_dim)
         # Mask certain input positions
@@ -62,7 +62,7 @@ class MultiHeadAttention(nn.Module):
         # Softmax over the input length n, differently for each head
         weights = nn.functional.softmax(potentials, dim=1)
         # Compute the pooled values
-        pooled_v = th.einsum("mnbh,nbhi->mbhi", [weights, v]).contiguous()
+        pooled_v = th.einsum("mnbh,nbhd->mbhd", [weights, v]).contiguous()
         # Output projection
         output = self.output(pooled_v.view(m, bsz, -1))
         if return_weights:
@@ -121,9 +121,11 @@ class EncoderLayer(nn.Module):
         # Self attention
         self.layer_norm_self_att = nn.LayerNorm(embed_dim)
         self.self_att = MultiHeadAttention(embed_dim, n_heads)
+        self.drop_self_att = nn.Dropout(p=dropout)
         # Feed forward
         self.layer_norm_ff = nn.LayerNorm(embed_dim)
         self.ff = FeedForwardTransducer(embed_dim, hidden_dim, dropout)
+        self.drop_ff = nn.Dropout(p=dropout)
 
     def forward(self, x, src_mask=None):
         # Self attention
@@ -134,11 +136,11 @@ class EncoderLayer(nn.Module):
             values=x_normed,
             in_mask=src_mask,
         )
-        x = x + nn.functional.dropout(h_self_att, p=self.dropout)
+        x = x + self.drop_self_att(h_self_att)
         # Feed-forward transform
         x_normed = self.layer_norm_ff(x)
         h_ff = self.ff(x_normed)
-        return x + nn.functional.dropout(h_ff, p=self.dropout)
+        return x + self.drop_ff(h_ff)
 
 
 class DecoderLayer(nn.Module):
@@ -154,12 +156,15 @@ class DecoderLayer(nn.Module):
         # Self attention
         self.layer_norm_self_att = nn.LayerNorm(embed_dim)
         self.self_att = MultiHeadAttention(embed_dim, n_heads)
+        self.drop_self_att = nn.Dropout(p=dropout)
         # Encoder attention
         self.layer_norm_enc_att = nn.LayerNorm(embed_dim)
         self.enc_att = MultiHeadAttention(embed_dim, n_heads)
+        self.drop_enc_att = nn.Dropout(p=dropout)
         # Feed forward
         self.layer_norm_ff = nn.LayerNorm(embed_dim)
         self.ff = FeedForwardTransducer(embed_dim, hidden_dim, dropout)
+        self.drop_ff = nn.Dropout(p=dropout)
 
     def forward(self, x, encodings, src_mask=None, tgt_mask=None):
         # Self attention
@@ -171,7 +176,7 @@ class DecoderLayer(nn.Module):
             in_mask=tgt_mask,
             causal_masking=True,  # Don't attend to the future
         )
-        x = x + nn.functional.dropout(h_self_att, p=self.dropout)
+        x = x + self.drop_self_att(h_self_att)
         # Encoder attention
         x_normed = self.layer_norm_enc_att(x)
         h_enc_att = self.enc_att(
@@ -180,11 +185,11 @@ class DecoderLayer(nn.Module):
             values=encodings,
             in_mask=src_mask,
         )
-        x = x + nn.functional.dropout(h_enc_att, p=self.dropout)
+        x = x + self.drop_enc_att(h_enc_att)
         # Feed-forward transform
         x_normed = self.layer_norm_ff(x)
         h_ff = self.ff(x_normed)
-        return x + nn.functional.dropout(h_ff, p=self.dropout)
+        return x + self.drop_ff(h_ff)
 
     def incremental_forward(
         self,
@@ -260,6 +265,7 @@ class Transformer(nn.Module):
         # Token embeddings (this will be shared for encoder/decoder)
         self.embeds = nn.Embedding(len(vocab), embed_dim, 0)
         nn.init.normal_(self.embeds.weight, std=1/sqrt(embed_dim))
+        self.embed_drop = nn.Dropout(p=dropout)
         # Positional embeddings
         self.pos_embeds = sin_embeddings(2048, embed_dim)
         # Encoder Layers
@@ -287,6 +293,7 @@ class Transformer(nn.Module):
 
     def encode(self, src_tokens, src_mask=None):
         x = self.embeds(src_tokens) * sqrt(self.embed_dim)
+        x = self.embed_drop(x)
         # Add position embedding
         pos_offset = self.pos_embeds[:x.size(0)].view(-1, 1, self.embed_dim)
         x += pos_offset.to(x.device).detach()
@@ -299,6 +306,7 @@ class Transformer(nn.Module):
         encodings = self.encode(src_tokens, src_mask)
         # Decode
         h = self.embeds(tgt_tokens) * sqrt(self.embed_dim)
+        h = self.embed_drop(h)
         # Add postion embeddings
         pos_offset = self.pos_embeds[:h.size(0)].view(-1, 1, self.embed_dim)
         h += pos_offset.to(h.device).detach()
@@ -324,6 +332,7 @@ class Transformer(nn.Module):
     ):
         new_state = []
         h = self.embeds(tgt_token) * sqrt(self.embed_dim)
+        h = self.embed_drop(h)
         # Add position embedding
         pos = states[0].size(0)
         pos_offset = self.pos_embeds[pos].view(1, 1, -1)

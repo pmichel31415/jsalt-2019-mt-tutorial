@@ -29,13 +29,13 @@ def get_args():
     parser.add_argument("--n-layers", type=int, default=4)
     parser.add_argument("--n-heads", type=int, default=4)
     parser.add_argument("--embed-dim", type=int, default=512)
-    parser.add_argument("--hidden-dim", type=int, default=1024)
+    parser.add_argument("--hidden-dim", type=int, default=512)
     parser.add_argument("--dropout", type=float, default=0.3)
     # Optimization parameters
     parser.add_argument("--n-epochs", type=int, default=30)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--tokens-per-batch", type=int, default=2000)
-    parser.add_argument("--samples-per-batch", type=int, default=200)
+    parser.add_argument("--samples-per-batch", type=int, default=128)
     return parser.parse_args()
 
 
@@ -61,6 +61,7 @@ def train_epoch(model, optim, dataloader, lr_schedule=None):
     # Iterate over batches
     itr = tqdm(dataloader)
     for batch in itr:
+        optim.zero_grad()
         itr.total = len(dataloader)
         # Cast input to device
         batch = move_to_device(batch, device)
@@ -103,9 +104,9 @@ def evaluate_ppl(model, dataloader):
         src_tokens, src_mask, tgt_tokens, tgt_mask = batch
         with th.no_grad():
             # Get log probs
-            log_p = model(src_tokens, tgt_tokens, src_mask, tgt_mask)
+            log_p = model(src_tokens, tgt_tokens[:-1], src_mask, tgt_mask[:-1])
             # Loss (this selects log_p[i, b, tgt_tokens[i+1, b]] for each batch b, position i)
-            nll = - log_p[:-1].gather(-1, tgt_tokens[1:].unsqueeze(-1))
+            nll = - log_p.gather(-1, tgt_tokens[1:].unsqueeze(-1))
             # Perplexity
             loss_mask = tgt_mask[1:].eq(0).float()
             ppl += th.exp(nll.squeeze(-1) * loss_mask).sum().item()
@@ -163,6 +164,7 @@ def main():
         print(f"Validation perplexity: {valid_ppl:.2f}")
         # Early stopping maybe
         if valid_ppl < best_ppl:
+            best_ppl = valid_ppl
             print(f"Saving new best model (epoch {epoch} ppl {valid_ppl})")
             th.save(model.state_dict(), args.model_file)
 
