@@ -5,12 +5,14 @@ from torch import nn
 # Negative infinity constant
 NEG_INF = -100000
 
+
 def GlorotLinear(input_dim, output_dim):
     """Returns a Glorot initialized linear layer for optimal gradient flow"""
     linear = nn.Linear(input_dim, output_dim)
     nn.init.xavier_uniform_(linear.weight)
     nn.init.constant_(linear.bias, 0)
     return linear
+
 
 class MultiHeadAttention(nn.Module):
 
@@ -191,7 +193,7 @@ class DecoderLayer(nn.Module):
         h_ff = self.ff(x_normed)
         return x + self.drop_ff(h_ff)
 
-    def incremental_forward(
+    def decode_step(
         self,
         x,
         encodings,
@@ -322,7 +324,7 @@ class Transformer(nn.Module):
         # Return log probs
         return nn.functional.log_softmax(logits, dim=-1)
 
-    def incremental_forward(
+    def decode_step(
         self,
         tgt_token,
         encodings,
@@ -339,7 +341,7 @@ class Transformer(nn.Module):
         h += pos_offset.detach()
         # Pass through all layers
         for layer, state in zip(self.decoder_layers, states):
-            h, state = layer.incremental_forward(
+            h, state = layer.decode_step(
                 h,
                 encodings,
                 state,

@@ -57,8 +57,6 @@ def inverse_sqrt_schedule(warmup, lr0):
 def train_epoch(model, optim, dataloader, lr_schedule=None, clip_grad=5.0):
     # Model device
     device = list(model.parameters())[0].device
-    # track stats
-    stats = {"loss": 10000}
     # Iterate over batches
     itr = tqdm(dataloader)
     for batch in itr:
@@ -70,7 +68,8 @@ def train_epoch(model, optim, dataloader, lr_schedule=None, clip_grad=5.0):
         src_tokens, src_mask, tgt_tokens, tgt_mask = batch
         # Get log probs
         log_p = model(src_tokens, tgt_tokens[:-1], src_mask, tgt_mask[:-1])
-        # Loss (this selects log_p[i, b, tgt_tokens[i+1, b]])
+        # Loss (this selects log_p[i, b, tgt_tokens[i+1, b]]
+        # for each batch b, position i)
         nll = - log_p.gather(-1, tgt_tokens[1:].unsqueeze(-1)).squeeze(-1)
         # Label smoothing
         label_smoothing = - log_p.mean(dim=-1)
@@ -109,7 +108,7 @@ def evaluate_ppl(model, dataloader):
         with th.no_grad():
             # Get log probs
             log_p = model(src_tokens, tgt_tokens[:-1], src_mask, tgt_mask[:-1])
-            # Loss (this selects log_p[i, b, tgt_tokens[i+1, b]] for each batch b, position i)
+            # Loss
             nll = - log_p.gather(-1, tgt_tokens[1:].unsqueeze(-1))
             # Perplexity
             loss_mask = tgt_mask[1:].eq(0).float()
