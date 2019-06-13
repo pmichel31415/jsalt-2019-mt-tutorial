@@ -5,6 +5,12 @@ from torch import nn
 # Negative infinity constant
 NEG_INF = -1000
 
+def GlorotLinear(input_dim, output_dim):
+    """Returns a Glorot initialized linear layer for optimal gradient flow"""
+    linear = nn.Linear(input_dim, output_dim)
+    nn.init.xavier_uniform_(linear.weight)
+    nn.init.constant_(linear.bias, 0)
+    return linear
 
 class MultiHeadAttention(nn.Module):
 
@@ -17,11 +23,11 @@ class MultiHeadAttention(nn.Module):
         if embed_dim % n_heads != 0:
             raise ValueError("embed_dim must be a multiple of n_heads")
         # Input projection layers
-        self.query = nn.Linear(self.embed_dim, self.embed_dim)
-        self.key = nn.Linear(self.embed_dim, self.embed_dim)
-        self.value = nn.Linear(self.embed_dim, self.embed_dim)
+        self.query = GlorotLinear(self.embed_dim, self.embed_dim)
+        self.key = GlorotLinear(self.embed_dim, self.embed_dim)
+        self.value = GlorotLinear(self.embed_dim, self.embed_dim)
         # Output projection layers
-        self.output = nn.Linear(self.embed_dim, self.embed_dim)
+        self.output = GlorotLinear(self.embed_dim, self.embed_dim)
 
     def forward(
             self,
@@ -75,10 +81,10 @@ class FeedForwardTransducer(nn.Module):
         self.dropout = dropout
         # Layers
         self.layers = nn.Sequential(
-            nn.Linear(self.embed_dim, self.hidden_dim),  # Input projection
+            GlorotLinear(self.embed_dim, self.hidden_dim),  # Input projection
             nn.ReLU(),                                   # Activation
             nn.Dropout(p=self.dropout),                  # Dropout
-            nn.Linear(self.hidden_dim, self.embed_dim),  # Output projection
+            GlorotLinear(self.hidden_dim, self.embed_dim),  # Output projection
         )
 
     def forward(self, x):
@@ -110,7 +116,7 @@ class EncoderLayer(nn.Module):
         self.embed_dim = embed_dim
         self.n_heads = n_heads
         self.hidden_dim = hidden_dim
-        self.droput = dropout
+        self.dropout = dropout
         # Sub-layers
         # Self attention
         self.layer_norm_self_att = nn.LayerNorm(embed_dim)
@@ -128,11 +134,11 @@ class EncoderLayer(nn.Module):
             values=x_normed,
             in_mask=src_mask,
         )
-        x = x + h_self_att
+        x = x + nn.functional.dropout(h_self_att, p=self.dropout)
         # Feed-forward transform
         x_normed = self.layer_norm_ff(x)
         h_ff = self.ff(x_normed)
-        return h_ff + x
+        return x + nn.functional.dropout(h_ff, p=self.dropout)
 
 
 class DecoderLayer(nn.Module):
@@ -165,7 +171,7 @@ class DecoderLayer(nn.Module):
             in_mask=tgt_mask,
             causal_masking=True,  # Don't attend to the future
         )
-        x = x + h_self_att
+        x = x + nn.functional.dropout(h_self_att, p=self.dropout)
         # Encoder attention
         x_normed = self.layer_norm_enc_att(x)
         h_enc_att = self.enc_att(
@@ -174,11 +180,11 @@ class DecoderLayer(nn.Module):
             values=encodings,
             in_mask=src_mask,
         )
-        x = x + h_enc_att
+        x = x + nn.functional.dropout(h_enc_att, p=self.dropout)
         # Feed-forward transform
         x_normed = self.layer_norm_ff(x)
         h_ff = self.ff(x_normed)
-        return h_ff + x
+        return x + nn.functional.dropout(h_ff, p=self.dropout)
 
     def incremental_forward(
         self,
@@ -266,7 +272,7 @@ class Transformer(nn.Module):
         # Output proj (this is important because the embeddings are tied)
         # and the output has been "layer-normalized".
         # this layer can adjust the scale before the logits.
-        self.out_proj = nn.Linear(embed_dim, embed_dim)
+        self.out_proj = GlorotLinear(embed_dim, embed_dim)
         # Decoder Layers
         self.decoder_layers = nn.ModuleList([
             DecoderLayer(embed_dim, n_heads, hidden_dim, dropout=dropout)
@@ -275,7 +281,7 @@ class Transformer(nn.Module):
         # Final decoder layer norm
         self.layer_norm_dec = nn.LayerNorm(embed_dim)
         # Output projection for the logits
-        self.logits = nn.Linear(embed_dim, len(vocab))
+        self.logits = GlorotLinear(embed_dim, len(vocab))
         # Share embedding and softmax weights
         self.logits.weight = self.embeds.weight
 

@@ -26,11 +26,11 @@ def get_args():
     parser.add_argument("--overwrite-model", action="store_true")
     parser.add_argument("--cuda", action="store_true")
     # Model parameters
-    parser.add_argument("--n-layers", type=int, default=6)
+    parser.add_argument("--n-layers", type=int, default=4)
     parser.add_argument("--n-heads", type=int, default=4)
     parser.add_argument("--embed-dim", type=int, default=512)
     parser.add_argument("--hidden-dim", type=int, default=1024)
-    parser.add_argument("--dropout", type=float, default=0.1)
+    parser.add_argument("--dropout", type=float, default=0.3)
     # Optimization parameters
     parser.add_argument("--n-epochs", type=int, default=30)
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -67,16 +67,16 @@ def train_epoch(model, optim, dataloader, lr_schedule=None):
         # Various inputs
         src_tokens, src_mask, tgt_tokens, tgt_mask = batch
         # Get log probs
-        log_p = model(src_tokens, tgt_tokens, src_mask, tgt_mask)
+        log_p = model(src_tokens, tgt_tokens[:-1], src_mask, tgt_mask[:-1])
         # Loss (this selects log_p[i, b, tgt_tokens[i+1, b]])
-        nll = - log_p[:-1].gather(-1, tgt_tokens[1:].unsqueeze(-1)).squeeze(-1)
+        nll = - log_p.gather(-1, tgt_tokens[1:].unsqueeze(-1)).squeeze(-1)
         # Label smoothing
-        label_smoothing = - log_p[:-1].mean(dim=-1)
+        label_smoothing = - log_p.mean(dim=-1)
         # Final loss at each step
         loss = 0.9 * nll + 0.1 * label_smoothing
         # Reduce (with masking)
         loss_mask = tgt_mask[1:].eq(0).float()
-        reduced_loss = (loss * loss_mask).sum() / loss_mask.float().sum()
+        reduced_loss = (loss * loss_mask).sum() / loss_mask.sum()
         # Backprop
         reduced_loss.backward()
         # Adjust learning rate with schedule
@@ -104,13 +104,13 @@ def evaluate_ppl(model, dataloader):
         with th.no_grad():
             # Get log probs
             log_p = model(src_tokens, tgt_tokens, src_mask, tgt_mask)
-            # Loss (this selects log_p[i, b, tgt_tokens[i+1, b]])
+            # Loss (this selects log_p[i, b, tgt_tokens[i+1, b]] for each batch b, position i)
             nll = - log_p[:-1].gather(-1, tgt_tokens[1:].unsqueeze(-1))
             # Perplexity
             loss_mask = tgt_mask[1:].eq(0).float()
             ppl += th.exp(nll.squeeze(-1) * loss_mask).sum().item()
             # Denominator
-            tot_tokens += loss_mask.float().sum().item()
+            tot_tokens += loss_mask.sum().item()
     return ppl/tot_tokens
 
 
@@ -134,7 +134,7 @@ def main():
     if os.path.isfile(args.model_file) and not args.overwrite_model:
         model.load_state_dict(th.load(args.model_file))
     # Optimizer
-    optim = th.optim.Adam(model.parameters(), lr=args.lr)
+    optim = th.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.98))
     # Learning rate schedule
     lr_schedule = inverse_sqrt_schedule(4000, args.lr)
     # Dataloader
