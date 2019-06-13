@@ -34,6 +34,7 @@ def get_args():
     # Optimization parameters
     parser.add_argument("--n-epochs", type=int, default=30)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--clip-grad", type=float, default=5.0)
     parser.add_argument("--tokens-per-batch", type=int, default=2000)
     parser.add_argument("--samples-per-batch", type=int, default=128)
     return parser.parse_args()
@@ -53,7 +54,7 @@ def inverse_sqrt_schedule(warmup, lr0):
         yield lr0 * scale
 
 
-def train_epoch(model, optim, dataloader, lr_schedule=None):
+def train_epoch(model, optim, dataloader, lr_schedule=None, clip_grad=5.0):
     # Model device
     device = list(model.parameters())[0].device
     # track stats
@@ -85,6 +86,9 @@ def train_epoch(model, optim, dataloader, lr_schedule=None):
             learning_rate = next(lr_schedule)
             for param_group in optim.param_groups:
                 param_group['lr'] = learning_rate
+        # Gradient clipping
+        if clip_grad > 0:
+            th.nn.utils.clip_grad_norm_(model.parameters(), clip_grad)
         # Optimizer step
         optim.step()
         # Update stats
@@ -157,7 +161,7 @@ def main():
         print(f"----- Epoch {epoch} -----")
         # Train for one epoch
         model.train()
-        train_epoch(model, optim, train_loader, lr_schedule)
+        train_epoch(model, optim, train_loader, lr_schedule, args.clip_grad)
         # Check dev ppl
         model.eval()
         valid_ppl = evaluate_ppl(model, valid_loader)
