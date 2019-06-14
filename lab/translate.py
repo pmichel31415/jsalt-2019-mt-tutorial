@@ -17,6 +17,7 @@ def get_args():
     parser.add_argument("--input-file", type=str, default=None)
     parser.add_argument("--output-file", type=str, default=None)
     parser.add_argument("--cuda", action="store_true")
+    parser.add_argument("--seed", type=int, default=15062019)
     # Model parameters
     parser.add_argument("--n-layers", type=int, default=4)
     parser.add_argument("--n-heads", type=int, default=4)
@@ -56,6 +57,8 @@ def translate_sentence(
 def main():
     # Command line arguments
     args = get_args()
+    # Fix seed for consistent sampling
+    th.manual_seed(args.seed)
     # data
     vocab, _, _ = load_data()
     # Model
@@ -70,7 +73,7 @@ def main():
     if args.cuda:
         model = model.cuda()
     # Load existing model
-    model.load_state_dict(th.load(args.model_file))
+    model.load_state_dict(th.load(args.model_file, map_location="cpu"))
     # Read from file/stdin
     if args.input_file is not None:
         input_stream = open(args.input_file, "r", encoding="utf-8")

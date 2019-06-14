@@ -68,36 +68,45 @@ def beam_search(
     # Start decoding
     eos_token = model.vocab["<eos>"]
     while not beams[-1]["is_over"]:
-        beam_candidates = []
-        for beam in beams:
-            # Ignore dead beams
-            if beam["is_over"]:
-                continue
-            # Input last procuced token
-            current_token = th.LongTensor([beam["tokens"][-1]])
-            current_token = current_token.view(1, 1).to(device)
-            # One step of the decoder
-            log_p, new_state = model.decode_step(
-                current_token,
-                encodings,
-                beam["state"]
-            )
-            # Get topk tokens
-            log_p_tokens, top_tokens = log_p.view(-1).topk(beam_size)
-            # Append to candidates
-            for token, log_p_token in zip(top_tokens, log_p_tokens):
+        # Pass on dead beams
+        beam_candidates = [beam for beam in beams if beam["is_over"]]
+        # Take a step on all active beams
+        active_beams = [beam for beam in beams if not beam["is_over"]]
+        # Last produced tokens
+        current_tokens = th.LongTensor([beam["tokens"][-1] for beam in active_beams])
+        current_tokens = current_tokens.view(1, -1).to(device)
+        # Decoder states
+        states = [
+            th.cat([beam["state"][layer] for beam in active_beams], dim=1)
+            if beams[0]["state"][0] is not None
+            else None
+            for layer in range(model.n_layers)
+        ]
+        # Take a step
+        log_ps, new_states = model.decode_step(
+            current_tokens,
+            encodings.repeat(1, len(active_beams), 1),
+            states,
+        )
+        # Topk tokens at this step
+        log_ps = log_ps.view(log_ps.size(1), -1)
+        log_p_tokens, top_tokens = log_ps.topk(beam_size, dim=-1)
+        # Append to candidates
+        for i, beam in enumerate(active_beams):
+            for token, log_p_token in zip(top_tokens[i], log_p_tokens[i]):
                 # Update tokens, state and log_p
-                beam_candidate = {
+                candidate = {
                     "tokens": beam["tokens"] + [token.item()],
-                    "state": [h.detach() for h in new_state],
+                    "state": [h[:, i:i+1].detach() for h in new_states],
                     "log_p": beam["log_p"] + log_p_token.item(),
                     "is_over": False,
                 }
                 # check whether this beam is over
-                if beam_candidate["tokens"][-1] == eos_token:
-                    beam_candidate["is_over"] = True
+                generated_eos = candidate["tokens"][-1] == eos_token
+                too_long = len(candidate["tokens"]) > max_len
+                candidate["is_over"] = generated_eos or too_long
                 # Save candidate
-                beam_candidates.append(beam_candidate)
+                beam_candidates.append(candidate)
         # Now rerank and keep top beams
         beams = sorted(
             beam_candidates,
