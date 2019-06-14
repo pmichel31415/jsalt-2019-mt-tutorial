@@ -17,7 +17,7 @@ def get_args():
     # Model parameters
     parser.add_argument("--n-layers", type=int, default=4)
     parser.add_argument("--n-heads", type=int, default=4)
-    parser.add_argument("--embed-dim", type=int, default=512)
+    parser.add_argument("--embed-dim", type=int, default=256)
     parser.add_argument("--hidden-dim", type=int, default=512)
     parser.add_argument("--dropout", type=float, default=0.3)
     # Translation parameters
@@ -71,9 +71,9 @@ def main():
     # Translate
     try:
         for line in input_stream:
-            in_words = input_stream.strip().split()
+            in_words = line.strip().split()
             out_words = translate_sentence(model, in_words)
-            print(out_words, file=output_stream)
+            print(" ".join(out_words), file=output_stream)
     except KeyboardInterrupt:
         pass
     finally:

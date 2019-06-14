@@ -209,26 +209,26 @@ class DecoderLayer(nn.Module):
             state = x_normed
         else:
             state = th.cat([state, x_normed], dim=0)
-        h_self_att, _ = self.self_att(
+        h_self_att = self.self_att(
             queries=x_normed,
             keys=state,
             values=state,
             in_mask=tgt_mask,
         )
-        x = x + h_self_att
+        x = x + self.drop_self_att(h_self_att)
         # Encoder attention
         x_normed = self.layer_norm_enc_att(x)
-        h_enc_att, _ = self.enc_att(
+        h_enc_att = self.enc_att(
             queries=x_normed,
             keys=encodings,
             values=encodings,
             in_mask=src_mask,
         )
-        x = x + h_enc_att
+        x = x + self.drop_enc_att(h_enc_att)
         # Feed-forward transform
         x_normed = self.layer_norm_ff(x)
         h_ff = self.ff(x_normed)
-        return h_ff + x, state
+        return h_ff + self.drop_ff(x), state
 
 
 def sin_embeddings(max_pos, dim):
@@ -332,30 +332,32 @@ class Transformer(nn.Module):
         src_mask=None,
         tgt_mask=None
     ):
-        new_state = []
+        new_states = []
         h = self.embeds(tgt_token) * sqrt(self.embed_dim)
         h = self.embed_drop(h)
         # Add position embedding
-        pos = states[0].size(0)
+        pos = 0 if states[0] is None else states[0].size(0)
         pos_offset = self.pos_embeds[pos].view(1, 1, -1)
-        h += pos_offset.detach()
+        h += pos_offset.to(h.device).detach()
         # Pass through all layers
         for layer, state in zip(self.decoder_layers, states):
-            h, state = layer.decode_step(
+            h, new_state = layer.decode_step(
                 h,
                 encodings,
                 state,
                 src_mask=src_mask,
                 tgt_mask=tgt_mask,
             )
-            new_state.append(state)
+            new_states.append(new_state)
         # Final layer norm so things don't blow up
         h = self.layer_norm_dec(h)
         # Output proj
         h = self.out_proj(h)
+        logits = self.logits(h)
+        print(logits)
         # Log prob at this position
-        log_p = nn.functional.log_softmax(self.logits(h), dim=-1)
-        return log_p, new_state
+        log_p = nn.functional.log_softmax(logits, dim=-1)
+        return log_p, new_states
 
     def initial_state(self):
         return [None for _ in range(self.n_layers)]

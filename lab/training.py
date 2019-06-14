@@ -1,6 +1,6 @@
 import os.path
 import argparse
-from math import sqrt
+from math import sqrt, exp
 import torch as th
 from data import MTDataset, MTDataLoader, Vocab
 from transformer import Transformer
@@ -28,13 +28,13 @@ def get_args():
     # Model parameters
     parser.add_argument("--n-layers", type=int, default=4)
     parser.add_argument("--n-heads", type=int, default=4)
-    parser.add_argument("--embed-dim", type=int, default=512)
+    parser.add_argument("--embed-dim", type=int, default=256)
     parser.add_argument("--hidden-dim", type=int, default=512)
     parser.add_argument("--dropout", type=float, default=0.3)
     # Optimization parameters
     parser.add_argument("--n-epochs", type=int, default=30)
     parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--clip-grad", type=float, default=5.0)
+    parser.add_argument("--clip-grad", type=float, default=1.0)
     parser.add_argument("--tokens-per-batch", type=int, default=2000)
     parser.add_argument("--samples-per-batch", type=int, default=128)
     return parser.parse_args()
@@ -70,14 +70,19 @@ def train_epoch(model, optim, dataloader, lr_schedule=None, clip_grad=5.0):
         log_p = model(src_tokens, tgt_tokens[:-1], src_mask, tgt_mask[:-1])
         # Loss (this selects log_p[i, b, tgt_tokens[i+1, b]]
         # for each batch b, position i)
-        nll = - log_p.gather(-1, tgt_tokens[1:].unsqueeze(-1)).squeeze(-1)
+        #nll = - log_p.gather(-1, tgt_tokens[1:].unsqueeze(-1)).squeeze(-1)
+        V = log_p.size(-1)
+        nll = th.nn.functional.nll_loss(log_p.view(-1, V), tgt_tokens[1:].view(-1), reduction="none")
+        nll = nll.view(log_p.size(0), -1)
         # Label smoothing
         label_smoothing = - log_p.mean(dim=-1)
         # Final loss at each step
-        loss = 0.9 * nll + 0.1 * label_smoothing
+        loss = nll #0.9 * nll + 0.1 * label_smoothing
         # Reduce (with masking)
         loss_mask = tgt_mask[1:].eq(0).float()
         reduced_loss = (loss * loss_mask).sum() / loss_mask.sum()
+        # Perplexity for stats
+        ppl = th.exp((nll * loss_mask).sum() / loss_mask.sum())
         # Backprop
         reduced_loss.backward()
         # Adjust learning rate with schedule
@@ -91,14 +96,15 @@ def train_epoch(model, optim, dataloader, lr_schedule=None, clip_grad=5.0):
         # Optimizer step
         optim.step()
         # Update stats
-        itr.set_postfix(loss=reduced_loss.item())
+        itr.set_postfix(loss=f"{reduced_loss.item():.3f}", ppl=f"{ppl.item():.2f}")
+
 
 
 def evaluate_ppl(model, dataloader):
     # Model device
     device = list(model.parameters())[0].device
     # total tokens
-    tot_tokens = ppl = 0
+    tot_tokens = tot_nll = 0
     # Iterate over batches
     for batch in tqdm(dataloader):
         # Cast input to device
@@ -110,12 +116,15 @@ def evaluate_ppl(model, dataloader):
             log_p = model(src_tokens, tgt_tokens[:-1], src_mask, tgt_mask[:-1])
             # Loss
             nll = - log_p.gather(-1, tgt_tokens[1:].unsqueeze(-1))
+            V = log_p.size(-1)
+            nll = th.nn.functional.nll_loss(log_p.view(-1, V), tgt_tokens[1:].view(-1), reduction="none")
+            nll = nll.view(log_p.size(0), -1)
             # Perplexity
             loss_mask = tgt_mask[1:].eq(0).float()
-            ppl += th.exp(nll.squeeze(-1) * loss_mask).sum().item()
+            tot_nll += (nll * loss_mask).sum().item()
             # Denominator
             tot_tokens += loss_mask.sum().item()
-    return ppl/tot_tokens
+    return exp(tot_nll / tot_tokens)
 
 
 def main():
@@ -155,7 +164,7 @@ def main():
         shuffle=False
     )
     # Train epochs
-    best_ppl = 10000
+    best_ppl = 1e12
     for epoch in range(1, args.n_epochs+1):
         print(f"----- Epoch {epoch} -----")
         # Train for one epoch

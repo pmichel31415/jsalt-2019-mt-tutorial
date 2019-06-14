@@ -19,10 +19,11 @@ def sample(model, src_tokens, temperature=1.0, max_len=200, device=None):
     out_tokens = [model.vocab["<sos>"]]
     eos_token = model.vocab["<eos>"]
     while out_tokens[-1] != eos_token and len(out_tokens) <= max_len:
+        current_token = th.LongTensor([out_tokens[-1]]).view(1,1).to(device)
         # One step of the decoder
-        log_p, state = model.decode_step(out_tokens[-1], encodings, state)
+        log_p, state = model.decode_step(current_token, encodings, state)
         # Probabilities
-        probs = th.exp(log_p / temperature)
+        probs = th.exp(log_p / temperature).view(-1)
         # Sample
         next_token = th.multinomial(probs.view(-1), 1).item()
         # Add to the generated sentence
