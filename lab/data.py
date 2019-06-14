@@ -61,7 +61,7 @@ class Vocab(object):
             return self.to_idx(symbol_or_idx)
 
     @staticmethod
-    def from_data_files(self, *filenames, max_size=-1, min_freq=1):
+    def from_data_files(*filenames, max_size=-1, min_freq=1):
         """Builds a dictionary from the most frequent tokens in files"""
         vocab = Vocab()
         # Record token counts

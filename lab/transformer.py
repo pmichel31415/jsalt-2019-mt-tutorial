@@ -58,7 +58,7 @@ class MultiHeadAttention(nn.Module):
         # Causal masking: make it impossible to "attend to the future"
         if causal_masking:
             # We want causal_mask[i, j] = 1 if j > i
-            causal_mask = th.triu(th.ones(m, n)).eq(0).view(m, n, 1, 1)
+            causal_mask = th.triu(th.ones(m, n)).eq(0).t().view(m, n, 1, 1)
             causal_mask = causal_mask.to(potentials.device)
             potentials = potentials.masked_fill(causal_mask, NEG_INF)
         # Softmax over the input length n, differently for each head
@@ -354,7 +354,6 @@ class Transformer(nn.Module):
         # Output proj
         h = self.out_proj(h)
         logits = self.logits(h)
-        print(logits)
         # Log prob at this position
         log_p = nn.functional.log_softmax(logits, dim=-1)
         return log_p, new_states

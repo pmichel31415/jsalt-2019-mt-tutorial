@@ -4,6 +4,7 @@ import torch as th
 from transformer import Transformer
 from decoding import sample
 from training import load_data
+from subwords import desegment
 
 
 def get_args():
@@ -17,7 +18,7 @@ def get_args():
     # Model parameters
     parser.add_argument("--n-layers", type=int, default=4)
     parser.add_argument("--n-heads", type=int, default=4)
-    parser.add_argument("--embed-dim", type=int, default=256)
+    parser.add_argument("--embed-dim", type=int, default=512)
     parser.add_argument("--hidden-dim", type=int, default=512)
     parser.add_argument("--dropout", type=float, default=0.3)
     # Translation parameters
@@ -73,7 +74,7 @@ def main():
         for line in input_stream:
             in_words = line.strip().split()
             out_words = translate_sentence(model, in_words)
-            print(" ".join(out_words), file=output_stream)
+            print(desegment(out_words), file=output_stream)
     except KeyboardInterrupt:
         pass
     finally:

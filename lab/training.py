@@ -28,9 +28,9 @@ def get_args():
     # Model parameters
     parser.add_argument("--n-layers", type=int, default=4)
     parser.add_argument("--n-heads", type=int, default=4)
-    parser.add_argument("--embed-dim", type=int, default=256)
+    parser.add_argument("--embed-dim", type=int, default=512)
     parser.add_argument("--hidden-dim", type=int, default=512)
-    parser.add_argument("--dropout", type=float, default=0.3)
+    parser.add_argument("--dropout", type=float, default=0.1)
     # Optimization parameters
     parser.add_argument("--n-epochs", type=int, default=30)
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -149,7 +149,7 @@ def main():
     # Optimizer
     optim = th.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.98))
     # Learning rate schedule
-    lr_schedule = inverse_sqrt_schedule(4000, args.lr)
+    lr_schedule = inverse_sqrt_schedule(2000, args.lr)
     # Dataloader
     train_loader = MTDataLoader(
         train_data,
