@@ -68,23 +68,23 @@ def train_epoch(model, optim, dataloader, lr_schedule=None, clip_grad=5.0):
         src_tokens, src_mask, tgt_tokens, tgt_mask = batch
         # Get log probs
         log_p = model(src_tokens, tgt_tokens[:-1], src_mask, tgt_mask[:-1])
-        # Loss (this selects log_p[i, b, tgt_tokens[i+1, b]]
+        # Negative log likelihood of the target tokens
+        # (this selects log_p[i, b, tgt_tokens[i+1, b]]
         # for each batch b, position i)
-        #nll = - log_p.gather(-1, tgt_tokens[1:].unsqueeze(-1)).squeeze(-1)
-        V = log_p.size(-1)
-        nll = th.nn.functional.nll_loss(log_p.view(-1, V), tgt_tokens[1:].view(-1), reduction="none")
-        nll = nll.view(log_p.size(0), -1)
-        # Label smoothing
-        label_smoothing = - log_p.mean(dim=-1)
-        # Final loss at each step
-        loss = nll #0.9 * nll + 0.1 * label_smoothing
-        # Reduce (with masking)
-        loss_mask = tgt_mask[1:].eq(0).float()
-        reduced_loss = (loss * loss_mask).sum() / loss_mask.sum()
-        # Perplexity for stats
-        ppl = th.exp((nll * loss_mask).sum() / loss_mask.sum())
+        nll = th.nn.functional.nll_loss(
+            # Log probabilities (flattened to (l*b) x V)
+            log_p.view(-1, log_p.size(-1)),
+            # Target tokens (we start from the 1st real token, ignoring <sos>)
+            tgt_tokens[1:].view(-1),
+            # Don't compute the nll of padding tokens
+            ignore_index=model.vocab["<pad>"],
+            # Take the average
+            reduction="mean",
+        )
+        # Perplexity (for logging)
+        ppl = th.exp(nll)
         # Backprop
-        reduced_loss.backward()
+        nll.backward()
         # Adjust learning rate with schedule
         if lr_schedule is not None:
             learning_rate = next(lr_schedule)
@@ -96,8 +96,7 @@ def train_epoch(model, optim, dataloader, lr_schedule=None, clip_grad=5.0):
         # Optimizer step
         optim.step()
         # Update stats
-        itr.set_postfix(loss=f"{reduced_loss.item():.3f}", ppl=f"{ppl.item():.2f}")
-
+        itr.set_postfix(loss=f"{nll.item():.3f}", ppl=f"{ppl.item():.2f}")
 
 
 def evaluate_ppl(model, dataloader):
@@ -114,16 +113,26 @@ def evaluate_ppl(model, dataloader):
         with th.no_grad():
             # Get log probs
             log_p = model(src_tokens, tgt_tokens[:-1], src_mask, tgt_mask[:-1])
-            # Loss
-            nll = - log_p.gather(-1, tgt_tokens[1:].unsqueeze(-1))
-            V = log_p.size(-1)
-            nll = th.nn.functional.nll_loss(log_p.view(-1, V), tgt_tokens[1:].view(-1), reduction="none")
-            nll = nll.view(log_p.size(0), -1)
-            # Perplexity
-            loss_mask = tgt_mask[1:].eq(0).float()
-            tot_nll += (nll * loss_mask).sum().item()
-            # Denominator
-            tot_tokens += loss_mask.sum().item()
+            # Negative log likelihood of the target tokens
+            # (this selects log_p[i, b, tgt_tokens[i+1, b]]
+            # for each batch b, position i)
+            nll = th.nn.functional.nll_loss(
+                # Log probabilities (flattened to (l*b) x V)
+                log_p.view(-1, log_p.size(-1)),
+                # Target tokens (we start from the 1st real token)
+                tgt_tokens[1:].view(-1),
+                # Don't compute the nll of padding tokens
+                ignore_index=model.vocab["<pad>"],
+                # Take the average
+                reduction="mean",
+            )
+            # Number of tokens (ignoring <sos> and <pad>)
+            n_sos = tgt_tokens.eq(model.vocab["<sos>"]).float().sum().item()
+            n_pad = tgt_tokens.eq(model.vocab["<pad>"]).float().sum().item()
+            n_tokens = tgt_tokens.numel() - n_pad - n_sos
+            # Keep track
+            tot_nll += nll.item()
+            tot_tokens += n_tokens
     return exp(tot_nll / tot_tokens)
 
 

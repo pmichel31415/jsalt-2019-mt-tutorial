@@ -1,8 +1,10 @@
 import sys
 import argparse
 import torch as th
+from tqdm import tqdm
+
 from transformer import Transformer
-from decoding import sample
+from decoding import sample, beam_search
 from training import load_data
 from subwords import desegment
 
@@ -22,8 +24,9 @@ def get_args():
     parser.add_argument("--hidden-dim", type=int, default=512)
     parser.add_argument("--dropout", type=float, default=0.3)
     # Translation parameters
-    parser.add_argument("--temperature", type=float, default=1.0)
-    parser.add_argument("--beam-size", type=float, default=1.0)
+    parser.add_argument("--sampling", action="store_true")
+    parser.add_argument("--beam-size", type=int, default=2)
+    parser.add_argument("--len-penalty", type=float, default=1.0)
     return parser.parse_args()
 
 
@@ -31,12 +34,21 @@ def move_to_device(tensors, device):
     return [tensor.to(device) for tensor in tensors]
 
 
-def translate_sentence(model, sentence, beam_size=1, temperature=1.0):
+def translate_sentence(
+    model,
+    sentence,
+    beam_size=1,
+    len_penalty=0.0,
+    sampling=False
+):
     # Convert string to indices
     src_tokens = [model.vocab[word] for word in sentence]
     # Decode
     with th.no_grad():
-        out_tokens = sample(model, src_tokens, temperature)
+        if sampling:
+            out_tokens = sample(model, src_tokens)
+        else:
+            out_tokens = beam_search(model, src_tokens, beam_size, len_penalty)
     # Convert back to strings
     return [model.vocab[tok] for tok in out_tokens]
 
@@ -67,14 +79,23 @@ def main():
     # Write to file/stdout
     if args.output_file is not None:
         output_stream = open(args.output_file, "w", encoding="utf-8")
+        # If we're printing to a file, display stats in stdout
+        input_stream = tqdm(input_stream)
     else:
         output_stream = sys.stdout
     # Translate
     try:
         for line in input_stream:
             in_words = line.strip().split()
-            out_words = translate_sentence(model, in_words)
+            out_words = translate_sentence(
+                model,
+                in_words,
+                beam_size=args.beam_size,
+                len_penalty=args.len_penalty,
+                sampling=args.sampling,
+            )
             print(desegment(out_words), file=output_stream)
+            output_stream.flush()
     except KeyboardInterrupt:
         pass
     finally:
