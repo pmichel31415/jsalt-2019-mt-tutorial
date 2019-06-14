@@ -55,7 +55,7 @@ produces
 You can see that:
 
 1. spaces are replaced with `▁`
-2. common words like `summer` and `cool` are kept as-is
+2. common words like `summer` and `interesting` are kept as-is
 3. less common words are like the adverb `positively` are split (here the adverbializer `ly` is detached)
 4. the unknown word JSALT is split into a lot of sub-words
 
