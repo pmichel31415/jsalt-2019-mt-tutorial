@@ -65,8 +65,9 @@ For convenience we've provided the segmented versions of the data files in `data
 
 We're going to do translation with a variation on the transformer model from [Attention Is All You Need](https://arxiv.org/abs/1706.03762):
 
-<img align="center" height="300" src="images/transformer.png" alt="Transformer architecture"/>
-
+<div align="center">
+<img height="400" src="images/transformer.png" alt="Transformer architecture"/>
+</div>
 ### Training a model
 
 You can train a transformer model by running `python lab\training.py`:
