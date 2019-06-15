@@ -63,7 +63,42 @@ For convenience we've provided the segmented versions of the data files in `data
 
 ### The Transformer Model
 
+We're going to do translation with a variation on the transformer model from [Attention Is All You Need](https://arxiv.org/abs/1706.03762):
 
+<img align="center" height="300" src="images/transformer.png" alt="Transformer architecture"/>
+
+### Training a model
+
+You can train a transformer model by running `python lab\training.py`:
+
+```bash
+python lab/training.py \
+    --cuda \
+    --n-layers 4 \
+    --n-heads 4 \
+    --embed-dim 512 \
+    --hidden-dim 512 \
+    --dropout 0.1 \
+    --lr 2e-4 \
+    --n-epochs 15 \
+    --tokens-per-batch 8000 \
+    --clip-grad 1.0
+```
+
+This will train a transformer with the following parameters:
+
+- `--cuda`: CUDA (train on GPU)
+- `--n-layers 4`: 4 layers (both in the encoder and decoder)
+- `--n-heads 4`: 4 attention heads in each attention layer
+- `--embed-dim 512`: This sets the dimension of the model to 512 (including word embeddings)
+- `--hidden-dim 512`: This sets the dimension of the hidden layer in the feedforward layers to 512
+- `--dropout 0.1`: Dropout (set higher for more regularization)
+- `--lr 2e-4`: Learning rate (`1/sqrt(embed_dim)` is a good heuristic)
+- `--n-epochs 15`: Maximum number of epochs
+- `--tokens-per-batch 8000`: Batch sentences together so that each batch contains at least 8000 tokens maximum
+- `--clip-grad 1.0`: Clip gradient norm at 1.0
+
+For convenience, we've trained a model for you.
 
 ### Sampling from a trained model
 

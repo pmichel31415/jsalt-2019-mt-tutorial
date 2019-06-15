@@ -32,10 +32,10 @@ def get_args():
     parser.add_argument("--hidden-dim", type=int, default=512)
     parser.add_argument("--dropout", type=float, default=0.1)
     # Optimization parameters
-    parser.add_argument("--n-epochs", type=int, default=30)
-    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--n-epochs", type=int, default=15)
+    parser.add_argument("--lr", type=float, default=4e-2)
     parser.add_argument("--clip-grad", type=float, default=1.0)
-    parser.add_argument("--tokens-per-batch", type=int, default=2000)
+    parser.add_argument("--tokens-per-batch", type=int, default=8000)
     parser.add_argument("--samples-per-batch", type=int, default=128)
     return parser.parse_args()
 
