@@ -1,6 +1,10 @@
 # MT Tutorial for the JSALT 2019 Summer School
 
+This is the Machine Translation tutorial given at the 2019 JSALT summer school.
+
 ## Course Materials
+
+Slides from the lecture are available [here](images/nmt_slides.pdf) .
 
 ## Lab session
 
