@@ -28,7 +28,6 @@ def get_args():
     parser.add_argument("--search", type=str, default="beam_search",
                         choices=["random", "greedy", "beam_search"])
     parser.add_argument("--beam-size", type=int, default=2)
-    parser.add_argument("--len-penalty", type=float, default=1.0)
     return parser.parse_args()
 
 
@@ -40,19 +39,18 @@ def translate_sentence(
     model,
     sentence,
     beam_size=1,
-    len_penalty=0.0,
     search="beam_search"
 ):
     # Convert string to indices
     src_tokens = [model.vocab[word] for word in sentence]
     # Decode
     with th.no_grad():
-        if beam_search == "random":
+        if search == "random":
             out_tokens = sample(model, src_tokens)
-        elif beam_search == "greedy":
+        elif search == "greedy":
             out_tokens = greedy(model, src_tokens)
         else:
-            out_tokens = beam_search(model, src_tokens, beam_size, len_penalty)
+            out_tokens = beam_search(model, src_tokens, beam_size)
     # Convert back to strings
     return [model.vocab[tok] for tok in out_tokens]
 
@@ -97,7 +95,6 @@ def main():
                 model,
                 in_words,
                 beam_size=args.beam_size,
-                len_penalty=args.len_penalty,
                 search=args.search,
             )
             print(desegment(out_words), file=output_stream)

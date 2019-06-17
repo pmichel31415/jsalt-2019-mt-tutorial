@@ -54,7 +54,6 @@ def beam_search(
     model,
     src_tokens,
     beam_size=1,
-    len_penalty=0.0,
     max_len=200,
     device=None
 ):
