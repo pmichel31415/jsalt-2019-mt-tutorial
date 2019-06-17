@@ -3,8 +3,8 @@ import argparse
 import torch as th
 from tqdm import tqdm
 
-from transformer_solution import Transformer
-from decoding_solution import sample, greedy, beam_search
+from transformer import Transformer
+from decoding import sample, greedy, beam_search
 from training import load_data
 from subwords import desegment
 

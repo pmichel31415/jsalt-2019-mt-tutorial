@@ -3,7 +3,7 @@ import argparse
 from math import sqrt, exp
 import torch as th
 from data import MTDataset, MTDataLoader, Vocab
-from transformer_solution import Transformer
+from transformer import Transformer
 from tqdm import tqdm
 
 
