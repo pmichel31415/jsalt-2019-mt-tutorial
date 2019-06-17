@@ -38,7 +38,7 @@ We first learn a sub-word model from the data. Specifically, starting from singl
 
 ```bash
 python lab/subwords.py train \
-    --model_prefix data/subwords
+    --model_prefix data/subwords \
     --vocab_size 16000 \
     --model_type bpe \
     --input data/train.en,data/train.fr
