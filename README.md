@@ -14,15 +14,17 @@ You will need python >= 3.6 to run this tutorial. You can get a (relatively ligh
 
 Next, install the required python packages (we recommend setting up a virtual environment: `pip install virtualenv && virtualenv env && source env/bin/activate` beforehand):
 
-1. Install pytorch (for autodiff/GPU/neural networks): `pip install torch>=1.0` (if this doesn't work, see https://pytorch.org/get-started/locally/#start-locally for custom installation options depending on your environment)
+1. Install pytorch (for autodiff/GPU/neural networks): `pip install torch>=1.0` (if this doesn't work, see https://pytorch.org/get-started/locally/#start-locally for custom installation options depending on your environment). Also install tqdm (`pip install tqdm`) for progress bars.
 2. Install sentencepiece (for subwords): `pip install sentencepiece`
 3. Install sacrebleu (for evaluating BLEU score): `pip install sacrebleu`
 
 #### 3. Get the data
 
-We'll be doing French to English translation on the [IWSLT2016 dataset](https://sites.google.com/site/iwsltevaluation2016/). We've prepared the data for you, you can download it from https://drive.google.com/file/d/1UaWMQRFaVDfyimw-A29bkffh-hmFBedh/view?usp=sharing
+We'll be doing French to English translation on the [IWSLT2016 dataset](https://sites.google.com/site/iwsltevaluation2016/). We've prepared the data for you, you can download it with:
 
-TODO: wget
+```bash
+wget https://github.com/pmichel31415/jsalt-2019-mt-tutorial/releases/download/1.0/data.zip
+```
 
 ### Subwords
 
@@ -81,7 +83,13 @@ In particular in our implementation we are using a small tweak on the original m
 
 **TODO 1**: We've implemented most of the transformer except for the forward methods of the encoder and decoder  layers (`EncoderLayer` and `DecoderLayer` in `lab/transformer.py`).
 
-You can verify your results by running
+to verify that your implementation is correct, first download our pretrained model:
+
+```bash
+wget https://github.com/pmichel31415/jsalt-2019-mt-tutorial/releases/download/1.0/model.pt
+```
+
+And run
 
 ```bash
 python lab/training.py --cuda --model-file model.pt --validate-only
@@ -120,7 +128,7 @@ This will train a transformer with the following parameters:
 - `--tokens-per-batch 8000`: Batch sentences together so that each batch contains at least 8000 tokens maximum
 - `--clip-grad 1.0`: Clip gradient norm at 1.0
 
-For convenience, we've trained a model for you.
+For convenience, we've trained a model for you (https://github.com/pmichel31415/jsalt-2019-mt-tutorial/releases/download/1.0/data.zip)
 
 ### Sampling from a trained model
 
