@@ -73,8 +73,13 @@ This architecture relies on 3 different "modules":
 
 - Word embeddings mapping word indices to learned vectors. This is implemented in pytorch with the `nn.Embedding`
 - Multi-head attention. This is implemented in `MultiHeadAttention` in `lab/transformer.py`
+- Position-wise feed-forward layers layers (2 layer MLP). Implemented as `FeedForwardTransducer`.
 
-**TODO 1**: We've implemented most of the transformer
+Additionally, it relies on position embeddings (to allow the model to consider each token's relative position), residual connections (for better gradient flow/expressivity at high layer counts) and layer normalization (to keep the amplitude of each layer in check).
+
+In particular in our implementation we are using a small tweak on the original model where layer normalization is applied *before* each layer and *after* the residual connection. Empirically this makes the model converge faster.
+
+**TODO 1**: We've implemented most of the transformer except for the forward methods of the encoder and decoder  layers (`EncoderLayer` and `DecoderLayer` in `lab/transformer.py`).
 
 ### Training a model
 

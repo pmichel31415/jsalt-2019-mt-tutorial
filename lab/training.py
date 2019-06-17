@@ -3,7 +3,7 @@ import argparse
 from math import sqrt, exp
 import torch as th
 from data import MTDataset, MTDataLoader, Vocab
-from transformer import Transformer
+from transformer_solution import Transformer
 from tqdm import tqdm
 
 
@@ -25,6 +25,7 @@ def get_args():
     parser.add_argument("--model-file", type=str, default="model.pt")
     parser.add_argument("--overwrite-model", action="store_true")
     parser.add_argument("--cuda", action="store_true")
+    parser.add_argument("--validate-only", action="store_true")
     # Model parameters
     parser.add_argument("--n-layers", type=int, default=4)
     parser.add_argument("--n-heads", type=int, default=4)
@@ -45,6 +46,7 @@ def move_to_device(tensors, device):
 
 
 def inverse_sqrt_schedule(warmup, lr0):
+    """Inverse sqrt learning rate schedule with warmup"""
     step = 0
     # Trick for allowing warmup of 0
     warmup = max(warmup, 0.01)
@@ -67,7 +69,7 @@ def train_epoch(model, optim, dataloader, lr_schedule=None, clip_grad=5.0):
         # Various inputs
         src_tokens, src_mask, tgt_tokens, tgt_mask = batch
         # Get log probs
-        log_p = model(src_tokens, tgt_tokens[:-1], src_mask, tgt_mask[:-1])
+        log_p = model(src_tokens, tgt_tokens[:-1], src_mask)
         # Negative log likelihood of the target tokens
         # (this selects log_p[i, b, tgt_tokens[i+1, b]]
         # for each batch b, position i)
@@ -112,7 +114,7 @@ def evaluate_ppl(model, dataloader):
         src_tokens, src_mask, tgt_tokens, tgt_mask = batch
         with th.no_grad():
             # Get log probs
-            log_p = model(src_tokens, tgt_tokens[:-1], src_mask, tgt_mask[:-1])
+            log_p = model(src_tokens, tgt_tokens[:-1], src_mask)
             # Negative log likelihood of the target tokens
             # (this selects log_p[i, b, tgt_tokens[i+1, b]]
             # for each batch b, position i)
@@ -172,22 +174,28 @@ def main():
         max_tokens=args.tokens_per_batch,
         shuffle=False
     )
-    # Train epochs
-    best_ppl = 1e12
-    for epoch in range(1, args.n_epochs+1):
-        print(f"----- Epoch {epoch} -----")
-        # Train for one epoch
-        model.train()
-        train_epoch(model, optim, train_loader, lr_schedule, args.clip_grad)
-        # Check dev ppl
-        model.eval()
+    # Either validate
+    if args.validate_only:
         valid_ppl = evaluate_ppl(model, valid_loader)
         print(f"Validation perplexity: {valid_ppl:.2f}")
-        # Early stopping maybe
-        if valid_ppl < best_ppl:
-            best_ppl = valid_ppl
-            print(f"Saving new best model (epoch {epoch} ppl {valid_ppl})")
-            th.save(model.state_dict(), args.model_file)
+    else:
+        # Train epochs
+        best_ppl = 1e12
+        for epoch in range(1, args.n_epochs+1):
+            print(f"----- Epoch {epoch} -----")
+            # Train for one epoch
+            model.train()
+            train_epoch(model, optim, train_loader,
+                        lr_schedule, args.clip_grad)
+            # Check dev ppl
+            model.eval()
+            valid_ppl = evaluate_ppl(model, valid_loader)
+            print(f"Validation perplexity: {valid_ppl:.2f}")
+            # Early stopping maybe
+            if valid_ppl < best_ppl:
+                best_ppl = valid_ppl
+                print(f"Saving new best model (epoch {epoch} ppl {valid_ppl})")
+                th.save(model.state_dict(), args.model_file)
 
 
 if __name__ == "__main__":

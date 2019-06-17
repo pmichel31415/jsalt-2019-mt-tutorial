@@ -75,7 +75,7 @@ class MultiHeadAttention(nn.Module):
         if causal_masking:
             # We want causal_mask[i, j] = 1 if j > i
             causal_mask = th.triu(th.ones(m, n), diagonal=1).view(m, n, 1, 1)
-            causal_mask = causal_mask.to(potentials.device)
+            causal_mask = causal_mask.eq(1).to(potentials.device)
             potentials = potentials.masked_fill(causal_mask, NEG_INF)
         # Softmax over the input length n, differently for each head
         weights = nn.functional.softmax(potentials, dim=1)
@@ -141,19 +141,13 @@ class EncoderLayer(nn.Module):
         :param src_mask: Mask of shape n x b indicating padding tokens in
             the source sentences (for masking in self-attention)
         """
-        # Self attention
-        x_normed = self.layer_norm_self_att(x)
-        h_self_att = self.self_att(
-            queries=x_normed,
-            keys=x_normed,
-            values=x_normed,
-            in_mask=src_mask,
-        )
-        x = x + self.drop_self_att(h_self_att)
-        # Feed-forward transform
-        x_normed = self.layer_norm_ff(x)
-        h_ff = self.ff(x_normed)
-        return x + self.drop_ff(h_ff)
+        # TODO 1: Implement the forward pass of a transformer encoder layer
+
+        # Remember, there are 2 modules: self-attention and position-wise
+        # feed forward
+
+        # Don't forget layer normalization and residual connections!
+        raise NotImplementedError("TODO 1")
 
 
 class DecoderLayer(nn.Module):
@@ -182,33 +176,21 @@ class DecoderLayer(nn.Module):
 
     def forward(self, x, encodings, src_mask=None):
         """
-        :param x: Tensor of shape n x b x embed_dim where n is the length
-            dimension and b the batch dimension
+        :param x: Input to this layer. Tensor of shape n x b x embed_dim where
+            n is the length dimension and b the batch dimension
+        :param encodings: Output from the encoder. Tensor of shape
+            n x b x embed_dim where n is the length dimension and b the batch
+            dimension
         :param src_mask: Mask of shape n x b indicating padding tokens in
             the source sentences (for masking in encoder-attention)
         """
-        # Self attention
-        x_normed = self.layer_norm_self_att(x)
-        h_self_att = self.self_att(
-            queries=x_normed,
-            keys=x_normed,
-            values=x_normed,
-            causal_masking=True,  # Don't attend to the future
-        )
-        x = x + self.drop_self_att(h_self_att)
-        # Encoder attention
-        x_normed = self.layer_norm_enc_att(x)
-        h_enc_att = self.enc_att(
-            queries=x_normed,
-            keys=encodings,
-            values=encodings,
-            in_mask=src_mask,
-        )
-        x = x + self.drop_enc_att(h_enc_att)
-        # Feed-forward transform
-        x_normed = self.layer_norm_ff(x)
-        h_ff = self.ff(x_normed)
-        return x + self.drop_ff(h_ff)
+        # TODO 1: Implement the forward pass of a transformer decoder layer
+
+        # Remember, there are 3 modules: self-attention, encoder attention
+        # and position-wise feed forward
+
+        # Don't forget layer normalization and residual connections!
+        raise NotImplementedError("TODO 1")
 
     def decode_step(
         self,
@@ -223,38 +205,29 @@ class DecoderLayer(nn.Module):
 
         :param x: Tensor of shape 1 x b x embed_dim where b is the batch
             dimension. This is the input at the current position only
+        :param encodings: Output from the encoder. Tensor of shape
+            n x b x embed_dim where n is the length dimension and b the batch
+            dimension
         :param src_mask: Mask of shape n x b indicating padding tokens in
             the source sentences (for masking in self-attention)
         :param state: This is either None or a n x b x embed_dim tensor
             containing the inputs to the self attention layers up until
             this position. This method returns an updated state
         """
-        # Self attention
-        x_normed = self.layer_norm_self_att(x)
-        # Update state
-        if state is None:
-            state = x_normed
-        else:
-            state = th.cat([state, x_normed], dim=0)
-        h_self_att = self.self_att(
-            queries=x_normed,
-            keys=state,
-            values=state,
-        )
-        x = x + self.drop_self_att(h_self_att)
-        # Encoder attention
-        x_normed = self.layer_norm_enc_att(x)
-        h_enc_att = self.enc_att(
-            queries=x_normed,
-            keys=encodings,
-            values=encodings,
-            in_mask=src_mask,
-        )
-        x = x + self.drop_enc_att(h_enc_att)
-        # Feed-forward transform
-        x_normed = self.layer_norm_ff(x)
-        h_ff = self.ff(x_normed)
-        return h_ff + self.drop_ff(x), state
+        # TODO 2: implement a decode step of the transformer decoder layer
+
+        # this is more or less the same as the forward pass except for 2 facts:
+
+        # 1. The input is now a single vector (or a batch of vector)
+        # 2. You need to handle the state of the decoder. At decoding step t
+        #   (for batch size bsz), the state for this layer will have shape
+        #   t x bsz x embed_dim. It represents the input to the self attention
+        #   layer for all previous positions. This is the only onformation we
+        #   need to compute the layer's aoutput at step t. You need to both
+        #   use the state during the forward pass and update it to account for
+        #   the current step. Finally, for the 1st step, the state will be None
+        #   (you should handle this case)
+        raise NotImplementedError()
 
 
 def sin_embeddings(max_pos, dim):
@@ -394,8 +367,19 @@ class Transformer(nn.Module):
         encodings,
         states,
         src_mask=None,
-        tgt_mask=None
     ):
+        """
+        This performs a forward pass on a single vector.
+        This is used during decoding.
+
+        :param x: Tensor of shape 1 x b x embed_dim where b is the batch
+            dimension. This is the input at the current position only
+        :param src_mask: Mask of shape n x b indicating padding tokens in
+            the source sentences (for masking in self-attention)
+        :param states: This is a list of either None or a n x b x embed_dim
+            tensors containing the inputs to each self attention layers up
+            until this position. This method returns an updated state.
+        """
         new_states = []
         h = self.embeds(tgt_token) * sqrt(self.embed_dim)
         h = self.embed_drop(h)
@@ -410,7 +394,6 @@ class Transformer(nn.Module):
                 encodings,
                 state,
                 src_mask=src_mask,
-                tgt_mask=tgt_mask,
             )
             new_states.append(new_state)
         # Final layer norm so things don't blow up
@@ -423,4 +406,5 @@ class Transformer(nn.Module):
         return log_p, new_states
 
     def initial_state(self):
+        """Returns the initial state for decoding (a list of None)"""
         return [None for _ in range(self.n_layers)]

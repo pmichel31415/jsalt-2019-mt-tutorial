@@ -3,7 +3,7 @@ import argparse
 import torch as th
 from tqdm import tqdm
 
-from transformer import Transformer
+from transformer_solution import Transformer
 from decoding import sample, beam_search
 from training import load_data
 from subwords import desegment
