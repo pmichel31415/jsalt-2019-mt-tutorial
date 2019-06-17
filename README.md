@@ -172,6 +172,35 @@ echo "▁J ' ai ▁donc ▁fait ▁le ▁tour ▁pour ▁essayer ▁les ▁autre
     python lab/translate.py --model-file model.pt --search "greedy"
 ```
 
+### Evaluating BLEU score
+
+We're now ready to evaluate the model's BLEU score. You can translate a subet of the test data in `data/toy.test.bpe.fr` with
+
+```
+python lab/translate.py --cuda --model-file model.pt --search "greedy" --input-file data/toy.test.bpe.fr --output-file toy.test.out.en
+```
+
+Take a look at the output file `toy.test.out.en` to get a feel of the translation quality. Now evaluate BLEU score with
+
+```bash
+cat toy.test.out.en | sacrebleu data/toy.test.en
+```
+
+You should get around **28** BLEU score.
+
+**TODO 4**: Compare the BLEU scores with random and greedy decoding.
+
+### Beam Search
+
+As alluded to earlier, greedy decoding (while better than random sampling) is not optimal. For example, the first word completely determins the generated translation, with no chance to recover. *Beam search* is a slightly better approximation of the structured argmax problem.
+
+In beam search, we keep track of the top `k` hypotheses (or *beams*) at every given step. Thus, hypotheses that have a lower probability in the first steps have a chance to recover.
+
+**TODO 5**: Implement beam search in `lab/decoding.py`. This is a bit harder than the previous exercises so don't hesitate to ask for help.
+
+You can test your implementation by verifying that setting the beam size to 1 gives you the same result.
+
+Can you get better BLEU score than with greedy decoding?
 
 ## Organizers
 
