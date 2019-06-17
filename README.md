@@ -172,21 +172,32 @@ echo "▁J ' ai ▁donc ▁fait ▁le ▁tour ▁pour ▁essayer ▁les ▁autre
     python lab/translate.py --model-file model.pt --search "greedy"
 ```
 
+Gives you 
+
+```
+So I went around to try and try the other doors and windows.
+```
+
 ### Evaluating BLEU score
 
 We're now ready to evaluate the model's BLEU score. You can translate a subet of the test data in `data/toy.test.bpe.fr` with
 
 ```
-python lab/translate.py --cuda --model-file model.pt --search "greedy" --input-file data/toy.test.bpe.fr --output-file toy.test.out.en
+python lab/translate.py \
+    --cuda \
+    --model-file model.pt \
+    --search "greedy" \
+    --input-file data/toy.test.bpe.fr \
+    --output-file toy.test.greedy.en
 ```
 
 Take a look at the output file `toy.test.out.en` to get a feel of the translation quality. Now evaluate BLEU score with
 
 ```bash
-cat toy.test.out.en | sacrebleu data/toy.test.en
+cat toy.test.greedy.en | sacrebleu data/toy.test.en
 ```
 
-You should get around **28** BLEU score.
+You should get around **26.9** BLEU score.
 
 **TODO 4**: Compare the BLEU scores with random and greedy decoding.
 
@@ -200,7 +211,21 @@ In beam search, we keep track of the top `k` hypotheses (or *beams*) at every gi
 
 You can test your implementation by verifying that setting the beam size to 1 gives you the same result.
 
-Can you get better BLEU score than with greedy decoding?
+Can you get better BLEU score than with greedy decoding? Try:
+
+```bash
+python lab/translate.py \
+    --cuda \
+    --model-file model.pt \
+    --search "beam_search" \
+    --beam-size 2 \
+    --input-file data/toy.test.bpe.fr \
+    --output-file toy.test.beam.2.en
+```
+
+You should get a BLEU score of around **28.1**. This is pretty good considering that we didn't change the model at all! Try higher beam sizes.
+
+You can try to improve your translation results by adding penalties for longer sentences, unknown words, etc... Try running your model on the full test set (`data/test.bpe.fr`) and report your best BLEU score.
 
 ## Organizers
 
