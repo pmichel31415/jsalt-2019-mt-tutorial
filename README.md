@@ -68,6 +68,14 @@ We're going to do translation with a variation on the transformer model from [At
 <div align="center">
 <img height="400" src="images/transformer.png" alt="Transformer architecture"/>
 </div>
+
+This architecture relies on 3 different "modules":
+
+- Word embeddings mapping word indices to learned vectors. This is implemented in pytorch with the `nn.Embedding`
+- Multi-head attention. This is implemented in `MultiHeadAttention` in `lab/transformer.py`
+
+**TODO 1**: We've implemented most of the transformer
+
 ### Training a model
 
 You can train a transformer model by running `python lab\training.py`:
@@ -102,6 +110,8 @@ This will train a transformer with the following parameters:
 For convenience, we've trained a model for you.
 
 ### Sampling from a trained model
+
+One of the easiest way of generating a translation with the model is to sample from the conditional distribution one word at a time. This is implemented in `` 
 
 ```bash
 echo "▁J ' ai ▁donc ▁fait ▁le ▁tour ▁pour ▁essayer ▁les ▁autres ▁portes ▁et ▁fenêtres ." |

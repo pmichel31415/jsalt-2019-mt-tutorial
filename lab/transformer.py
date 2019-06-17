@@ -15,6 +15,7 @@ def GlorotLinear(input_dim, output_dim):
 
 
 class MultiHeadAttention(nn.Module):
+    """Multi head attention"""
 
     def __init__(self, embed_dim, n_heads):
         super(MultiHeadAttention, self).__init__()
@@ -40,6 +41,21 @@ class MultiHeadAttention(nn.Module):
         causal_masking=False,
         return_weights=False,
     ):
+        """
+        :param queries: Tensor of shape m x b x embed_dim where m is the length
+            dimension and b the batch dimension
+        :param keys: Tensor of shape n x b x embed_dim where n is the length
+            dimension and b the batch dimension
+        :param values: Tensor of shape n x b x embed_dim where n is the length
+            dimension and b the batch dimension
+        :param in_mask: n x b mask with 1 at positions that shouldn't be
+            attended to (typically padding tokens)
+        :param causal_masking: For each query position i, set the attention to
+            all key positions j >i to 0, thus preventing the model from
+            attending "to the future" (typically in unidirectional
+            language models)
+        :param return_weights: Return attention weights
+        """
         m, bsz, _ = queries.size()
         n, _, _ = keys.size()
         # Project keys, queries and values (all of shape m/n x b x embed_dim)
@@ -74,6 +90,7 @@ class MultiHeadAttention(nn.Module):
 
 
 class FeedForwardTransducer(nn.Module):
+    """Applies a 2-layer MLP to each position in a sequence"""
 
     def __init__(self, embed_dim, hidden_dim, dropout=0.0):
         super(FeedForwardTransducer, self).__init__()
@@ -84,33 +101,21 @@ class FeedForwardTransducer(nn.Module):
         # Layers
         self.layers = nn.Sequential(
             GlorotLinear(self.embed_dim, self.hidden_dim),  # Input projection
-            nn.ReLU(),                                   # Activation
-            nn.Dropout(p=self.dropout),                  # Dropout
+            nn.ReLU(),                                      # Activation
+            nn.Dropout(p=self.dropout),                     # Dropout
             GlorotLinear(self.hidden_dim, self.embed_dim),  # Output projection
         )
 
     def forward(self, x):
+        """
+        :param x: Tensor of shape n x b x embed_dim where n is the length
+            dimension and b the batch dimension
+        """
         return self.layers(x)
 
 
-class ResidualBlock(nn.Module):
-    """Encapsulates a layer with a residual connection
-    and layer norm on the input
-
-    Residual(f)(x) = x + f(layer_norm(x))"""
-
-    def __init__(self, layer, dim):
-        super(ResidualBlock, self).__init__()
-        self.layer_norm = nn.LayerNorm(dim)
-        self.layer = layer
-
-    def forward(self, x, *args, **kwargs):
-        x_normed = self.layer_norm(x)
-        h = self.layer(x_normed, *args, **kwargs)
-        return h + x
-
-
 class EncoderLayer(nn.Module):
+    """Transformer encoder layer"""
 
     def __init__(self, embed_dim, n_heads, hidden_dim, dropout=0.0):
         super(EncoderLayer, self).__init__()
@@ -130,6 +135,12 @@ class EncoderLayer(nn.Module):
         self.drop_ff = nn.Dropout(p=dropout)
 
     def forward(self, x, src_mask=None):
+        """
+        :param x: Tensor of shape n x b x embed_dim where n is the length
+            dimension and b the batch dimension
+        :param src_mask: Mask of shape n x b indicating padding tokens in
+            the source sentences (for masking in self-attention)
+        """
         # Self attention
         x_normed = self.layer_norm_self_att(x)
         h_self_att = self.self_att(
@@ -146,6 +157,7 @@ class EncoderLayer(nn.Module):
 
 
 class DecoderLayer(nn.Module):
+    """Transformer decoder layer"""
 
     def __init__(self, embed_dim, n_heads, hidden_dim, dropout=0.0):
         super(DecoderLayer, self).__init__()
@@ -168,14 +180,19 @@ class DecoderLayer(nn.Module):
         self.ff = FeedForwardTransducer(embed_dim, hidden_dim, dropout)
         self.drop_ff = nn.Dropout(p=dropout)
 
-    def forward(self, x, encodings, src_mask=None, tgt_mask=None):
+    def forward(self, x, encodings, src_mask=None):
+        """
+        :param x: Tensor of shape n x b x embed_dim where n is the length
+            dimension and b the batch dimension
+        :param src_mask: Mask of shape n x b indicating padding tokens in
+            the source sentences (for masking in encoder-attention)
+        """
         # Self attention
         x_normed = self.layer_norm_self_att(x)
         h_self_att = self.self_att(
             queries=x_normed,
             keys=x_normed,
             values=x_normed,
-            in_mask=tgt_mask,
             causal_masking=True,  # Don't attend to the future
         )
         x = x + self.drop_self_att(h_self_att)
@@ -199,9 +216,19 @@ class DecoderLayer(nn.Module):
         encodings,
         state,
         src_mask=None,
-        tgt_mask=None
     ):
-        """This is used in decoding"""
+        """
+        This performs a forward pass on a single vector.
+        This is used during decoding.
+
+        :param x: Tensor of shape 1 x b x embed_dim where b is the batch
+            dimension. This is the input at the current position only
+        :param src_mask: Mask of shape n x b indicating padding tokens in
+            the source sentences (for masking in self-attention)
+        :param state: This is either None or a n x b x embed_dim tensor
+            containing the inputs to the self attention layers up until
+            this position. This method returns an updated state
+        """
         # Self attention
         x_normed = self.layer_norm_self_att(x)
         # Update state
@@ -213,7 +240,6 @@ class DecoderLayer(nn.Module):
             queries=x_normed,
             keys=state,
             values=state,
-            in_mask=tgt_mask,
         )
         x = x + self.drop_self_att(h_self_att)
         # Encoder attention
@@ -232,7 +258,7 @@ class DecoderLayer(nn.Module):
 
 
 def sin_embeddings(max_pos, dim):
-    """Returns sinusoidal embedings (for possition embeddings)"""
+    """Returns sinusoidal embedings(for position embeddings)"""
     # Scale for each dimension
     dim_scale = 2 * (th.arange(dim) / 2).long().float() / dim
     dim_scale = th.pow(th.full((dim,), 10000.0), dim_scale).view(1, -1)
@@ -247,6 +273,7 @@ def sin_embeddings(max_pos, dim):
 
 
 class Transformer(nn.Module):
+    """The full transformer model"""
 
     def __init__(
         self,
@@ -257,6 +284,15 @@ class Transformer(nn.Module):
         vocab,
         dropout=0.0
     ):
+        """
+        :param n_layers: Number of layers (both encoder and decoder)
+        :param embed_dim: Embedding dimension (dimension throughout the model)
+        :param hidden_dim: Dimension of the hidden layer in position-wise
+            feed-forward layers
+        :param n_heads: Number of attention heads
+        :param vocab: Vocabulary object (see data.py)
+        :param dropout: Dopout probability
+        """
         super(Transformer, self).__init__()
         # Hyper-parameters
         self.n_layers = n_layers
@@ -294,32 +330,60 @@ class Transformer(nn.Module):
         self.logits.weight = self.embeds.weight
 
     def encode(self, src_tokens, src_mask=None):
+        """
+        This encodes a batch of tokens (for feeding into the decoder)
+
+        :param src_tokens: Tensor of integers of shape n x b representing
+            the source tokens
+        :param src_mask: Tensor of shape n x b identifying the padding
+            tokens for masking
+        """
+        # Embed and rescale
         x = self.embeds(src_tokens) * sqrt(self.embed_dim)
+        # Apply dropout
         x = self.embed_drop(x)
         # Add position embedding
         pos_offset = self.pos_embeds[:x.size(0)].view(-1, 1, self.embed_dim)
         x += pos_offset.to(x.device).detach()
+        # Run through the encoder
         for layer in self.encoder_layers:
             x = layer(x, src_mask=src_mask)
+        # Layer normalize
+        # (to prevent all the residual connections from blowing up)
         return self.layer_norm_enc(x)
 
-    def forward(self, src_tokens, tgt_tokens, src_mask=None, tgt_mask=None):
-        # Encode
+    def forward(self, src_tokens, tgt_tokens, src_mask=None):
+        """
+        Returns a tensor log_p of shape m x b x |V| where log_p[i, k, w]
+        corresponds to the log probability of word w being at position i
+        in the bth target sentence (conditioned on the bth source sentence
+        and all the tokens at positions <i).
+
+        :param src_tokens: Tensor of integers of shape n x b representing
+            the source tokens
+        :param src_tokens: Tensor of integers of shape m x b representing
+            the target tokens
+        :param src_mask: Tensor of shape n x b identifying the padding
+            tokens for masking
+        """
+        # Encode source tokens
         encodings = self.encode(src_tokens, src_mask)
-        # Decode
+        # Embed target tokens
         h = self.embeds(tgt_tokens) * sqrt(self.embed_dim)
         h = self.embed_drop(h)
-        # Add postion embeddings
+        # Add position embeddings
         pos_offset = self.pos_embeds[:h.size(0)].view(-1, 1, self.embed_dim)
         h += pos_offset.to(h.device).detach()
-        # Pass through all layers
+        # Pass through all decoder layers
         for layer in self.decoder_layers:
-            h = layer(h, encodings, src_mask=src_mask, tgt_mask=tgt_mask)
+            h = layer(h, encodings, src_mask=src_mask)
         # Final layer norm so things don't blow up
         h = self.layer_norm_dec(h)
-        # Output proj
+        # Output proj (into the embedding dimension).
+        # This is necessary to make the model expressive enough since the
+        # softmax weights are shared with the embeddings
         h = self.out_proj(h)
-        # Logits
+        # obtain logits for every word
         logits = self.logits(h)
         # Return log probs
         return nn.functional.log_softmax(logits, dim=-1)
