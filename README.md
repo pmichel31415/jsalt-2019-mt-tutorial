@@ -85,7 +85,7 @@ Additionally, it relies on position embeddings (to allow the model to consider e
 
 In particular in our implementation we are using a small tweak on the original model where layer normalization is applied *before* each layer and *after* the residual connection. Empirically this makes the model converge faster.
 
-**TODO 1**: We've implemented most of the transformer except for the forward methods of the encoder and decoder  layers (`EncoderLayer` and `DecoderLayer` in `lab/transformer.py`).
+**TODO 1**: We've implemented most of the transformer except for the forward methods of the encoder and decoder  layers ([`EncoderLayer`](https://github.com/pmichel31415/jsalt-2019-mt-tutorial/blob/master/lab/transformer.py#L137) and [`DecoderLayer`](https://github.com/pmichel31415/jsalt-2019-mt-tutorial/blob/master/lab/transformer.py#L177) in `lab/transformer.py`).
 
 to verify that your implementation is correct, first download our pretrained model:
 
@@ -138,7 +138,7 @@ For convenience, we've trained a model for you (https://github.com/pmichel31415/
 
 One of the easiest way of generating a translation with the model is to sample from the conditional distribution one word at a time. This is implemented in `lab/decode.py`. However in order for decoding to be efficient, we need to implement another function in `DecoderLayer`:
 
-**TODO 2**: Implement the `decode_step` method in `DecoderLayer`. This method allows us to perform one step of decoding (return `log p (y_t | x, y_1,...,y_{t-1})`).
+**TODO 2**: Implement the `decode_step` method in [`DecoderLayer`](https://github.com/pmichel31415/jsalt-2019-mt-tutorial/blob/master/lab/transformer.py#L195). This method allows us to perform one step of decoding (return `log p (y_t | x, y_1,...,y_{t-1})`).
 
 You can verify that your implementation is correct by running:
 
@@ -175,7 +175,7 @@ Random sampling is not optimal for decoding. Ideally we'd want to generate the a
 
 A first approximation is to do "greedy" decoding: at each step fo decoding, instead of sampling, select the most probable token according to the model (Side question: why is this not the same as finding the argmax of `p(y|x)`? Can you come up with a simple example where this would be sub-optimal?).
 
-**TODO 3**: Implement greedy decoding in `lab/decoding.py`.
+**TODO 3**: Implement greedy decoding in [`lab/decoding.py`](https://github.com/pmichel31415/jsalt-2019-mt-tutorial/blob/master/lab/decoding.py#L38).
 
 You can test your results by verifying that:
 
@@ -219,7 +219,7 @@ As alluded to earlier, greedy decoding (while better than random sampling) is no
 
 In beam search, we keep track of the top `k` hypotheses (or *beams*) at every given step. Thus, hypotheses that have a lower probability in the first steps have a chance to recover.
 
-**TODO 5**: Implement beam search in `lab/decoding.py`. This is a bit harder than the previous exercises so don't hesitate to ask for help.
+**TODO 5**: Implement beam search in [`lab/decoding.py`](https://github.com/pmichel31415/jsalt-2019-mt-tutorial/blob/master/lab/decoding.py#L53). This is a bit harder than the previous exercises so don't hesitate to ask for help.
 
 You can test your implementation by verifying that setting the beam size to 1 gives you the same result.
 
