@@ -102,6 +102,7 @@ def train_epoch(model, optim, dataloader, lr_schedule=None, clip_grad=5.0):
 
 
 def evaluate_ppl(model, dataloader):
+    model.eval()
     # Model device
     device = list(model.parameters())[0].device
     # total tokens
