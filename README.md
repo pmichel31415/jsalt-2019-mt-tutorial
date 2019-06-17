@@ -81,6 +81,14 @@ In particular in our implementation we are using a small tweak on the original m
 
 **TODO 1**: We've implemented most of the transformer except for the forward methods of the encoder and decoder  layers (`EncoderLayer` and `DecoderLayer` in `lab/transformer.py`).
 
+You can verify your results by running
+
+```bash
+python lab/training.py --cuda --model-file model.pt --validate-only
+```
+
+If your implementation is correct this should give you a perplexity of 5.57 with the provided model.
+
 ### Training a model
 
 You can train a transformer model by running `python lab\training.py`:
@@ -116,24 +124,34 @@ For convenience, we've trained a model for you.
 
 ### Sampling from a trained model
 
-One of the easiest way of generating a translation with the model is to sample from the conditional distribution one word at a time. This is implemented in `` 
+One of the easiest way of generating a translation with the model is to sample from the conditional distribution one word at a time. This is implemented in `lab/decode.py`. However in order for decoding to be efficient, we need to implement another function in `DecoderLayer`:
+
+**TODO 2**: Implement the `decode_step` method in `DecoderLayer`. This method allows us to perform one step of decoding (return `log p (y_t | x, y_1,...,y_{t-1})`).
+
+You can verify that your implementation is correct by running:
 
 ```bash
 echo "▁J ' ai ▁donc ▁fait ▁le ▁tour ▁pour ▁essayer ▁les ▁autres ▁portes ▁et ▁fenêtres ." |
     python lab/translate.py --model-file model.pt --sampling
 ```
 
+Which should return:
+
 ```
 So I went all the way to try out the other doors and windows.
 ```
 
-Try out another seed
+Congrats! You've just used your MT model to translate something for the first time.
+
+Since we are doing random sampling, you can get different results by using a different random seed:
 
 
 ```bash
 echo "▁J ' ai ▁donc ▁fait ▁le ▁tour ▁pour ▁essayer ▁les ▁autres ▁portes ▁et ▁fenêtres ." |
-    python lab/translate.py --model-file model.pt --sampling --seed 123456
+    python lab/translate.py --model-file model.pt --search "random" --seed 123456
 ```
+
+should give:
 
 ```
 Thus, I went around in order to try to other doors and windows.
@@ -141,7 +159,19 @@ Thus, I went around in order to try to other doors and windows.
 
 ### Greedy decoding
 
-TODO
+Random sampling is not optimal for decoding. Ideally we'd want to generate the argmax of the conditional distribution `p(y|x)`. However, with auto-regressive model that don't satisfy any kind of markov property this is intractable (we would need to explore an infinite number of possible translations).
+
+A first approximation is to do "greedy" decoding: at each step fo decoding, instead of sampling, select the most probable token according to the model (Side question: why is this not the same as finding the argmax of `p(y|x)`? Can you come up with a simple example where this would be sub-optimal?).
+
+**TODO 3**: Implement greedy decoding in `lab/decoding.py`.
+
+You can test your results by verifying that:
+
+```bash
+echo "▁J ' ai ▁donc ▁fait ▁le ▁tour ▁pour ▁essayer ▁les ▁autres ▁portes ▁et ▁fenêtres ." |
+    python lab/translate.py --model-file model.pt --search "greedy"
+```
+
 
 ## Organizers
 

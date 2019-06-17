@@ -4,7 +4,7 @@ import torch as th
 from tqdm import tqdm
 
 from transformer_solution import Transformer
-from decoding import sample, beam_search
+from decoding_solution import sample, greedy, beam_search
 from training import load_data
 from subwords import desegment
 
@@ -25,7 +25,8 @@ def get_args():
     parser.add_argument("--hidden-dim", type=int, default=512)
     parser.add_argument("--dropout", type=float, default=0.3)
     # Translation parameters
-    parser.add_argument("--sampling", action="store_true")
+    parser.add_argument("--search", type=str, default="beam_search",
+                        choices=["random", "greedy", "beam_search"])
     parser.add_argument("--beam-size", type=int, default=2)
     parser.add_argument("--len-penalty", type=float, default=1.0)
     return parser.parse_args()
@@ -40,14 +41,16 @@ def translate_sentence(
     sentence,
     beam_size=1,
     len_penalty=0.0,
-    sampling=False
+    search="beam_search"
 ):
     # Convert string to indices
     src_tokens = [model.vocab[word] for word in sentence]
     # Decode
     with th.no_grad():
-        if sampling:
+        if beam_search == "random":
             out_tokens = sample(model, src_tokens)
+        elif beam_search == "greedy":
+            out_tokens = greedy(model, src_tokens)
         else:
             out_tokens = beam_search(model, src_tokens, beam_size, len_penalty)
     # Convert back to strings
@@ -95,7 +98,7 @@ def main():
                 in_words,
                 beam_size=args.beam_size,
                 len_penalty=args.len_penalty,
-                sampling=args.sampling,
+                search=args.search,
             )
             print(desegment(out_words), file=output_stream)
             output_stream.flush()
