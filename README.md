@@ -144,7 +144,7 @@ You can verify that your implementation is correct by running:
 
 ```bash
 echo "▁J ' ai ▁donc ▁fait ▁le ▁tour ▁pour ▁essayer ▁les ▁autres ▁portes ▁et ▁fenêtres ." |
-    python lab/translate.py --model-file model.pt --sampling
+    python lab/translate.py --model-file model.pt --search "random"
 ```
 
 Which should return:
