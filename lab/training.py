@@ -126,7 +126,7 @@ def evaluate_ppl(model, dataloader):
                 # Don't compute the nll of padding tokens
                 ignore_index=model.vocab["<pad>"],
                 # Take the average
-                reduction="mean",
+                reduction="sum",
             )
             # Number of tokens (ignoring <sos> and <pad>)
             n_sos = tgt_tokens.eq(model.vocab["<sos>"]).float().sum().item()
