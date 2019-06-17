@@ -179,16 +179,25 @@ echo "▁J ' ai ▁donc ▁fait ▁le ▁tour ▁pour ▁essayer ▁les ▁autre
 
 <img align="left" height="100" src="images/jia_xu_pic.png" alt="Jia pic"/>
 
-[Jia bio]
+Main instructor
+Assistant Professor
+Graduate Center and Hunter College
+City University of New York (CUNY)
 
 ### Paul Michel
 
 <img align="left" height="100" src="images/paul_michel_pic.jpg" alt="Paul pic"/>
 
-[Paul bio]
+Lab instructor
+Phd Student
+School of Computer Science
+Carnegie Mellon University
 
 ### Abdul Rafae Khan
 
 <img align="left" height="100" src="images/abdul_rafae_khan_pic.jpg" alt="Abdul pic"/>
 
-[Abdul bio]
+Lab instructor
+PhD Student
+Graduate Center and Hunter College
+City University of New York (CUNY)
