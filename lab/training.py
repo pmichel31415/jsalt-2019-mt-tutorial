@@ -3,7 +3,7 @@ import argparse
 from math import sqrt, exp
 import torch as th
 from data import MTDataset, MTDataLoader, Vocab
-from transformer_solution import Transformer
+from transformer import Transformer
 from tqdm import tqdm
 
 
@@ -102,6 +102,7 @@ def train_epoch(model, optim, dataloader, lr_schedule=None, clip_grad=5.0):
 
 
 def evaluate_ppl(model, dataloader):
+    model.eval()
     # Model device
     device = list(model.parameters())[0].device
     # total tokens
@@ -126,7 +127,7 @@ def evaluate_ppl(model, dataloader):
                 # Don't compute the nll of padding tokens
                 ignore_index=model.vocab["<pad>"],
                 # Take the average
-                reduction="mean",
+                reduction="sum",
             )
             # Number of tokens (ignoring <sos> and <pad>)
             n_sos = tgt_tokens.eq(model.vocab["<sos>"]).float().sum().item()

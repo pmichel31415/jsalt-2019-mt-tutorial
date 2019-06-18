@@ -38,7 +38,7 @@ We first learn a sub-word model from the data. Specifically, starting from singl
 
 ```bash
 python lab/subwords.py train \
-    --model_prefix data/subwords
+    --model_prefix data/subwords \
     --vocab_size 16000 \
     --model_type bpe \
     --input data/train.en,data/train.fr
@@ -144,7 +144,7 @@ You can verify that your implementation is correct by running:
 
 ```bash
 echo "▁J ' ai ▁donc ▁fait ▁le ▁tour ▁pour ▁essayer ▁les ▁autres ▁portes ▁et ▁fenêtres ." |
-    python lab/translate.py --model-file model.pt --sampling
+    python lab/translate.py --model-file model.pt --search "random"
 ```
 
 Which should return:
@@ -238,6 +238,10 @@ python lab/translate.py \
 You should get a BLEU score of around **28.1**. This is pretty good considering that we didn't change the model at all! Try higher beam sizes.
 
 You can try to improve your translation results by adding penalties for longer sentences, unknown words, etc... Try running your model on the full test set (`data/test.bpe.fr`) and report your best BLEU score.
+
+### What's next?
+
+Feel free to for this repo and train your own models. You can probably get better results with better training techinques (different optimizers/batch size, label smoothing, l2 regularization) and bigger models. Try variations on this transformer architecture (eg. untie the word embeddings, play around with the residual connections and the layer norm, etc...). If you want to train on much bigger datasets, take a look at [fairseq](https://github.com/pytorch/fairseq/). It is  a bit more complicated than this codebase but much more efficient.
 
 ## Organizers
 
