@@ -239,6 +239,10 @@ You should get a BLEU score of around **28.1**. This is pretty good considering 
 
 You can try to improve your translation results by adding penalties for longer sentences, unknown words, etc... Try running your model on the full test set (`data/test.bpe.fr`) and report your best BLEU score.
 
+### Solutions
+
+If you are stuck at any point, you can find the solution code in the `solutions` branch.
+
 ### What's next?
 
 Feel free to for this repo and train your own models. You can probably get better results with better training techinques (different optimizers/batch size, label smoothing, l2 regularization) and bigger models. Try variations on this transformer architecture (eg. untie the word embeddings, play around with the residual connections and the layer norm, etc...). If you want to train on much bigger datasets, take a look at [fairseq](https://github.com/pytorch/fairseq/). It is  a bit more complicated than this codebase but much more efficient.
